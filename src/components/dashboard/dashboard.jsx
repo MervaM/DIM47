@@ -44,26 +44,23 @@ export default function Dashboard() {
   }, []);
 
   const sortOrdersList = (ordersArray) => {
-    // Завершені статуси (Доставка, Відмова) відправляємо в самий низ
     const isCompleted = (status) => status === 'Доставка' || status === 'Відмова';
 
     return [...ordersArray].sort((a, b) => {
       const compA = isCompleted(a.status);
       const compB = isCompleted(b.status);
 
-      // Активні замовлення завжди вище за завершені
+      // Активні замовлення завжди вище за завершені (Доставка, Відмова)
       if (compA !== compB) {
         return compA ? 1 : -1;
       }
       
-      // ГОЛОВНЕ: Серед активних (або серед завершених) найновіші завжди зверху!
-      const dateA = new Date(a.createdAt || 0).getTime();
-      const dateB = new Date(b.createdAt || 0).getTime();
-      
-      if (dateA !== dateB) {
-        return dateB - dateA; // Від нових до старіших
+      // Якщо у обох є createdAt — сортуємо за ним (найновіші зверху)
+      if (a.createdAt && b.createdAt && a.createdAt !== b.createdAt) {
+        return b.createdAt.localeCompare(a.createdAt);
       }
-
+      
+      // Залізобетонне сортування за ID Firebase (новіші ID завжди йдуть першими)
       return b.id.localeCompare(a.id);
     });
   };
@@ -100,7 +97,7 @@ export default function Dashboard() {
           price: item.price !== undefined ? item.price : 0,
           image: item.productImage || item.image || '',
           colorImage: item.colorImage || item.color_image || '',
-          createdAt: item.createdAt || new Date().toISOString(),
+          createdAt: item.createdAt || '', // Не підставляємо поточну дату для старих!
           productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color_text || '—'}, ${item.material || '—'}, ${item.sole || '—'}`
         });
       });

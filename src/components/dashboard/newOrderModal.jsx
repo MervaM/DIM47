@@ -47,14 +47,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   }
 
-  // Фільтруємо товари залежно від того, що обираємо (взуття чи палітру кольорів)
+  // Чітке розмежування за папками (folderId)
   const shoesStock = currentStock.filter(item => item && (item.folderId === 'shoes' || !item.folderId));
   const paletteStock = currentStock.filter(item => item && (item.folderId === 'palette' || item.folderId === 'colors' || item.isPalette));
 
-  // Якщо палітра порожня у сховищі, показуємо суміжні категорії або весь склад, щоб модалка не була порожньою
-  const activeStockList = activeImageType === 'color' 
-    ? (paletteStock.length > 0 ? paletteStock : currentStock) 
-    : shoesStock;
+  // Суворий вибір залежно від типу модалки
+  const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
 
   const filteredStockProducts = shoesStock.filter(item => 
     item && item.name && item.name.toLowerCase().includes(name.toLowerCase())
@@ -121,6 +119,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       if (product.name) setName(product.name);
     } else if (activeImageType === 'color') {
       if (imgUrl) setColorImage(imgUrl);
+      if (product.name && !color) setColor(product.name); // опційно підтягуємо назву кольору, якщо є
     }
     
     setIsStockImagesOpen(false);

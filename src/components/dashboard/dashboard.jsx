@@ -44,27 +44,24 @@ export default function Dashboard() {
   }, []);
 
   const sortOrdersList = (ordersArray) => {
-    const statusPriority = {
-      'Нове': 1,
-      'В роботі': 2,
-      'Доставка': 3,
-      'Відмова': 4
-    };
+    // Завершені статуси (Доставка, Відмова) відправляємо в самий низ
+    const isCompleted = (status) => status === 'Доставка' || status === 'Відмова';
 
     return [...ordersArray].sort((a, b) => {
-      const pA = statusPriority[a.status] || 1;
-      const pB = statusPriority[b.status] || 1;
-      
-      if (pA !== pB) {
-        return pA - pB; 
+      const compA = isCompleted(a.status);
+      const compB = isCompleted(b.status);
+
+      // Активні замовлення завжди вище за завершені
+      if (compA !== compB) {
+        return compA ? 1 : -1;
       }
       
-      // Найновіші зверху
+      // ГОЛОВНЕ: Серед активних (або серед завершених) найновіші завжди зверху!
       const dateA = new Date(a.createdAt || 0).getTime();
       const dateB = new Date(b.createdAt || 0).getTime();
       
       if (dateA !== dateB) {
-        return dateB - dateA;
+        return dateB - dateA; // Від нових до старіших
       }
 
       return b.id.localeCompare(a.id);

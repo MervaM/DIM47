@@ -26,25 +26,32 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const fileInputRef = useRef(null);
   const colorFileInputRef = useRef(null);
 
-  // Беріть дані з пропсов або напряму з localStorage без зайвих useEffect
-  let currentStock = stock;
-  if (!currentStock || currentStock.length === 0) {
+  // Автоматичне збирання товарів з усіх можливих джерел (пропси + localStorage)
+  let currentStock = Array.isArray(stock) ? [...stock] : [];
+  if (currentStock.length === 0) {
     try {
-      const savedShoes = JSON.parse(localStorage.getItem('shoes')) || [];
-      const savedStock = JSON.parse(localStorage.getItem('stock')) || [];
-      currentStock = [...savedShoes, ...savedStock];
+      const keysToCheck = ['shoes', 'stock', 'products', 'items', 'warehouse'];
+      keysToCheck.forEach(key => {
+        const data = localStorage.getItem(key);
+        if (data) {
+          const parsed = JSON.parse(data);
+          if (Array.isArray(parsed)) {
+            currentStock = [...currentStock, ...parsed];
+          }
+        }
+      });
     } catch (e) {
-      currentStock = [];
+      // Ігноруємо помилки парсингу
     }
   }
 
   const filteredStockProducts = currentStock.filter(item => 
-    item.name && item.name.toLowerCase().includes(name.toLowerCase())
+    item && item.name && item.name.toLowerCase().includes(name.toLowerCase())
   );
 
   const handleSelectProductFromStock = (product) => {
     setName(product.name || '');
-    const prodImg = product.image || product.photo || product.img;
+    const prodImg = product.image || product.photo || product.img || product.colorImage;
     if (prodImg) setImage(prodImg);
     if (product.price) setPrice(product.price);
     if (product.size) setSize(product.size);
@@ -177,7 +184,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                   setIsProductDropdownOpen(true);
                 }}
                 onFocus={() => setIsProductDropdownOpen(true)}
-                placeholder="Назва товару (напр. Черевики)"
+                placeholder="Назва товару (напр. Мюлі)"
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 required
               />
@@ -186,11 +193,11 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
             {isProductDropdownOpen && filteredStockProducts.length > 0 && (
               <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                {filteredStockProducts.map((prod) => {
-                  const prodImg = prod.image || prod.photo || prod.img;
+                {filteredStockProducts.map((prod, index) => {
+                  const prodImg = prod.image || prod.photo || prod.img || prod.colorImage;
                   return (
                     <div
-                      key={prod.id || Math.random()}
+                      key={prod.id || index}
                       onClick={() => handleSelectProductFromStock(prod)}
                       className="flex items-center gap-3 p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none transition"
                     >

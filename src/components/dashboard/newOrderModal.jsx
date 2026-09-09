@@ -45,8 +45,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
   const isColorOrMaterialItem = (item) => {
     if (!item) return false;
-    const n = (item.name || '').toLowerCase();
-    const folder = (item.folderId || '').toLowerCase();
+    const n = String(item.name || '').toLowerCase();
+    const folder = String(item.folderId || '').toLowerCase();
     
     if (folder.includes('color') || folder.includes('palet') || folder.includes('шкір') || folder.includes('замш')) return true;
 
@@ -80,38 +80,36 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     } catch (e) {}
   });
 
-  paletteStock = Array.from(new Set(paletteStock.map(item => item.id || item.name)))
-    .map(id => paletteStock.find(item => (item.id || item.name) === id));
+  paletteStock = Array.from(new Set(paletteStock.map(item => item?.id || item?.name)))
+    .map(id => paletteStock.find(item => (item?.id || item?.name) === id))
+    .filter(Boolean);
 
   const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
   const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
 
   const filteredStockProducts = shoesStock.filter(item => 
-    item && item.name && item.name.toLowerCase().includes(name.toLowerCase())
+    item && item.name && String(item.name).toLowerCase().includes(String(name).toLowerCase())
   );
 
-  const handleSmartClientParse = (text) => {
-    const rawText = String(text || '');
+  const handleSmartClientParse = (eOrText) => {
+    const rawText = typeof eOrText === 'string' ? eOrText : (eOrText?.target?.value ?? '');
     setSmartText(rawText);
     if (!rawText.trim()) return;
 
     let cleanText = rawText;
 
-    // 1. Телефон
     const phoneMatch = cleanText.match(/(\+?38)?0\d{9}/);
     if (phoneMatch) {
       setPhone(phoneMatch[0]);
       cleanText = cleanText.replace(phoneMatch[0], ' ');
     }
 
-    // 2. Відділення НП / адреса
     const addressMatch = cleanText.match(/(?:відділення|нп|пошта|№)\s*[\w№\-]*\s*\d+/i) || cleanText.match(/№\s*\d+/i) || cleanText.match(/(?:відділення|нп)\s*№?\s*\d+/i);
     if (addressMatch) {
       setAddress(addressMatch[0].trim());
       cleanText = cleanText.replace(addressMatch[0], ' ');
     }
 
-    // 3. Місто
     const ukraineCities = /Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-|Чернівц|Ужгород|Хмельницьк|Вінниц|Черкас|Полтав|Суми|Запоріжжя|Миколаїв|Кропивницьк|Луцьк|Чернігів|Нововолинськ|Ковель|Володимир/i;
     const cityMatch = cleanText.match(/(?:м\.|місто)\s*([А-ЯІЄЇҐ][а-яієїґ]+(?:[- ][А-ЯІЄЇҐ][а-яієїґ]+)?)/i) || cleanText.match(ukraineCities);
     if (cityMatch) {
@@ -120,13 +118,11 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       cleanText = cleanText.replace(cityMatch[0], ' ');
     }
 
-    // Очищаємо сміття та області
     cleanText = cleanText
       .replace(/область|обл\.|район|району|або|доставка|отримувач|Волинська|Львівська|Київська/gi, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
 
-    // 4. ПІБ клієнта
     const words = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
     if (words.length > 0) {
       const possibleName = words.find(w => w.split(/\s+/).length >= 2) || words[0];
@@ -137,6 +133,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   };
 
   const handleSelectProductFromStock = (product) => {
+    if (!product) return;
     setName(product.name || '');
     const prodImg = product.image || product.photo || product.img || product.colorImage;
     if (prodImg) setImage(prodImg);
@@ -151,7 +148,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   };
 
   const handleFileUpload = (e, type) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -163,6 +160,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   };
 
   const handleSelectImageFromStock = (product) => {
+    if (!product) return;
     const imgUrl = product.image || product.photo || product.img || product.colorImage;
     
     if (activeImageType === 'product') {
@@ -201,7 +199,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       status: 'нове',
       createdAt: new Date().toISOString()
     };
-    onSave(newOrder);
+
+    // Безпечний виклик onSave, щоб не падало, якщо забули передати пропс у батьківському компоненті
+    if (typeof onSave === 'function') {
+      onSave(newOrder);
+    } else {
+      console.warn('onSave пропс не передано у компонент NewOrderModal!', newOrder);
+    }
     onClose();
   };
 
@@ -235,7 +239,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               )}
               <div className="flex gap-1.5 w-full justify-center">
                 <input type="file" ref={fileInputRef} onChange={(e) => handleFileUpload(e, 'product')} className="hidden" accept="image/*" />
-                <button type="button" title="Завантажити з пристрою" onClick={() => fileInputRef.current.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                <button type="button" title="Завантажити з пристрою" onClick={() => fileInputRef.current?.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
                   <Upload size={16} />
                 </button>
                 <button type="button" title="Вибрати зі складу" onClick={() => { setActiveImageType('product'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
@@ -258,7 +262,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               )}
               <div className="flex gap-1.5 w-full justify-center">
                 <input type="file" ref={colorInputRef} onChange={(e) => handleFileUpload(e, 'color')} className="hidden" accept="image/*" />
-                <button type="button" title="Завантажити з пристрою" onClick={() => colorInputRef.current.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                <button type="button" title="Завантажити з пристрою" onClick={() => colorInputRef.current?.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
                   <Upload size={16} />
                 </button>
                 <button type="button" title="Вибрати з палітри" onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
@@ -289,6 +293,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             {isProductDropdownOpen && filteredStockProducts.length > 0 && (
               <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                 {filteredStockProducts.map((prod, index) => {
+                  if (!prod) return null;
                   const prodImg = prod.image || prod.photo || prod.img || prod.colorImage;
                   return (
                     <div
@@ -312,7 +317,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
-          {/* Характеристики товару */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
             
@@ -323,7 +327,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <input type="text" value={color} onChange={(e) => setColor(e.target.value)} placeholder="Колір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             </div>
 
-            {/* Байка / Хутро знизу під усіма характеристиками */}
             <div className="flex items-center justify-between pt-1">
               <span className="text-[11px] text-slate-500 font-medium">Вид утеплювача:</span>
               <div className="flex gap-1.5">
@@ -341,7 +344,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             <textarea
               rows="2"
               value={smartText}
-              onChange={(e) => handleSmartClientParse(e.target.value)}
+              onChange={handleSmartClientParse}
               placeholder="Вставте сюди весь текст від клієнта..."
               className="w-full px-3 py-2 bg-amber-50/40 border border-amber-200/70 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             />
@@ -397,6 +400,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1 max-h-96">
               {activeStockList.length > 0 ? (
                 activeStockList.map((item, index) => {
+                  if (!item) return null;
                   const img = item.image || item.photo || item.img || item.colorImage;
                   return (
                     <div key={item.id || index}>

@@ -13,31 +13,10 @@ import {
 
 export default function Dashboard() {
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
-  
-  const [formClientName, setFormClientName] = useState('');
-  const [formClientPhone, setFormClientPhone] = useState('');
-  const [formCity, setFormCity] = useState('');
-  const [formWarehouse, setFormWarehouse] = useState('');
-  const [formAdvance, setFormAdvance] = useState('');
-  const [formDiscount, setFormDiscount] = useState('');
-  const [formPaymentType, setFormPaymentType] = useState('Передоплата');
-  const [formNote, setFormNote] = useState('');
-  
-  const [formProductTitle, setFormProductTitle] = useState('');
-  const [formSize, setFormSize] = useState('');
-  const [formColorText, setFormColorText] = useState('');
-  const [formMaterial, setFormMaterial] = useState('');
-  const [formSole, setFormSole] = useState('');
-  const [formFilling, setFormFilling] = useState(''); // Поле для наповнення (байка/хутро)
-  const [formPrice, setFormPrice] = useState('2500');
-  const [formProductImage, setFormProductImage] = useState('');
-  const [formColorImage, setFormColorImage] = useState('');
-
   const [editingId, setEditingId] = useState(null);
   const [orders, setOrders] = useState([]);
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Відмова'];
 
@@ -92,22 +71,21 @@ export default function Dashboard() {
           phone: item.clientPhone || item.phone || '',
           city: item.city || '',
           warehouse: item.warehouse || '',
-          email: item.email || '',
           advance: item.advance !== undefined ? item.advance : 0,
           discount: item.discount || '',
           payment: item.paymentType || item.payment || '',
           note: item.note || '',
-          productTitle: item.productTitle || item.product_title || '',
+          productTitle: item.productTitle || item.name || '',
           size: item.size || '',
-          colorText: item.colorText || item.color_text || '',
+          colorText: item.colorText || item.color || '',
           material: item.material || '',
           sole: item.sole || '',
-          filling: item.filling || '',
+          filling: item.filling || item.lining || '',
           price: item.price !== undefined ? item.price : 0,
           image: item.productImage || item.image || '',
-          colorImage: item.colorImage || item.color_image || '',
+          colorImage: item.colorImage || '',
           createdAt: item.createdAt || '',
-          productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || ''}, ${item.material || ''}, ${item.filling || item.sole || ''}`
+          productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color || ''}, ${item.material || ''}, ${item.filling || item.sole || ''}`
         });
       });
 
@@ -122,78 +100,40 @@ export default function Dashboard() {
 
   const handleOpenCreateModal = () => {
     setEditingId(null);
-    setFormClientName('');
-    setFormClientPhone('');
-    setFormCity('');
-    setFormWarehouse('');
-    setFormAdvance('300');
-    setFormDiscount('');
-    setFormPaymentType('Передоплата');
-    setFormNote('');
-    setFormProductTitle('');
-    setFormSize('');
-    setFormColorText('');
-    setFormMaterial('');
-    setFormSole('');
-    setFormFilling('');
-    setFormPrice('2500');
-    setFormProductImage('');
-    setFormColorImage('');
     setShowNewOrderModal(true);
   };
 
   const handleEditOrder = (order) => {
     setEditingId(order.id);
-    setFormClientName(order.client || '');
-    setFormClientPhone(order.phone || '');
-    setFormCity(order.city || '');
-    setFormWarehouse(order.warehouse || '');
-    setFormAdvance(order.advance || '');
-    setFormDiscount(order.discount || '');
-    setFormPaymentType(order.payment || 'Передоплата');
-    setFormNote(order.note || '');
-    setFormProductTitle(order.productTitle || '');
-    setFormSize(order.size || '');
-    setFormColorText(order.colorText || '');
-    setFormMaterial(order.material || '');
-    setFormSole(order.sole || '');
-    setFormFilling(order.filling || '');
-    setFormPrice(order.price || '2500');
-    setFormProductImage(order.image || '');
-    setFormColorImage(order.colorImage || '');
+    // Якщо твоє модальне вікно підтримує передачу поточної моделі для редагування, 
+    // передай її або заповни відповідні стейти в модалці.
     setShowNewOrderModal(true);
   };
 
-  const handleSaveOrder = async (e) => {
-    if (e && typeof e.preventDefault === 'function') {
-      e.preventDefault();
-    }
-
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    
-    const dbPayload = {
-      clientName: formClientName || 'Без імені',
-      clientPhone: formClientPhone || '—',
-      city: formCity || '—',
-      warehouse: formWarehouse || '—',
-      advance: Number(formAdvance) || 0,
-      discount: Number(formDiscount) || 0,
-      paymentType: formPaymentType,
-      note: formNote,
-      productTitle: formProductTitle || 'Черевики',
-      size: formSize,
-      colorText: formColorText,
-      material: formMaterial,
-      sole: formSole,
-      filling: formFilling,
-      price: Number(formPrice) || 0,
-      productImage: formProductImage || '',
-      colorImage: formColorImage || '',
-      productDetails: `${formSize || '—'} розм., ${formColorText || '—'}, ${formMaterial || '—'}, ${formFilling || formSole || '—'}`
-    };
-
+  // Головна функція збереження, яка приймає готовий об'єкт замовлення з модалки
+  const handleSaveOrder = async (orderData) => {
     try {
+      const dbPayload = {
+        clientName: orderData.clientName || 'Без імені',
+        clientPhone: orderData.phone || '—',
+        city: orderData.city || '—',
+        warehouse: orderData.address || '—',
+        advance: Number(orderData.advance) || 0,
+        discount: Number(orderData.discount) || 0,
+        paymentType: orderData.paymentType || 'Передплата',
+        note: orderData.comment || '',
+        productTitle: orderData.name || 'Черевики',
+        size: orderData.size || '',
+        colorText: orderData.color || '',
+        material: orderData.material || '',
+        sole: orderData.sole || '',
+        filling: orderData.lining || '',
+        price: Number(orderData.price) || 0,
+        productImage: orderData.image || '',
+        colorImage: orderData.colorImage || '',
+        productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
+      };
+
       if (editingId) {
         const orderRef = doc(db, "orders", editingId);
         await updateDoc(orderRef, dbPayload);
@@ -213,8 +153,6 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Помилка збереження:', error);
       alert('Не вдалося зберегти замовлення');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -272,11 +210,11 @@ export default function Dashboard() {
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
                 isActive 
                   ? 'bg-slate-900 text-white shadow-xs' 
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-550'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
               }`}
             >
               <span>{status}</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                 isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-500'
               }`}>
                 {count}
@@ -299,28 +237,11 @@ export default function Dashboard() {
         />
       )}
 
+      {/* Передаємо onSave замість купи окремих стейтів */}
       <NewOrderModal 
         isOpen={showNewOrderModal}
         onClose={() => setShowNewOrderModal(false)}
-        onSubmit={handleSaveOrder}
-        isEditing={!!editingId}
-        formClientName={formClientName} setFormClientName={setFormClientName}
-        formClientPhone={formClientPhone} setFormClientPhone={setFormClientPhone}
-        formCity={formCity} setFormCity={setFormCity}
-        formWarehouse={formWarehouse} setFormWarehouse={setFormWarehouse}
-        formAdvance={formAdvance} setFormAdvance={setFormAdvance}
-        formDiscount={formDiscount} setFormDiscount={setFormDiscount}
-        formPaymentType={formPaymentType} setFormPaymentType={setFormPaymentType}
-        formNote={formNote} setFormNote={setFormNote}
-        formProductTitle={formProductTitle} setFormProductTitle={setFormProductTitle}
-        formSize={formSize} setFormSize={setFormSize}
-        formColorText={formColorText} setFormColorText={setFormColorText}
-        formMaterial={formMaterial} setFormMaterial={setFormMaterial}
-        formSole={formSole} setFormSole={setFormSole}
-        formFilling={formFilling} setFormFilling={setFormFilling}
-        formPrice={formPrice} setFormPrice={setFormPrice}
-        formProductImage={formProductImage} setFormProductImage={setFormProductImage}
-        formColorImage={formColorImage} setFormColorImage={setFormColorImage}
+        onSave={handleSaveOrder}
       />
     </div>
   );

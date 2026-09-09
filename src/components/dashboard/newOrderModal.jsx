@@ -45,12 +45,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   }
 
+  // Розширений пошук палітри / кольорів з усіх можливих джерел
   let paletteStock = currentStock.filter(item => 
-    item && (item.folderId === 'palette' || item.folderId === 'colors' || item.isPalette || item.type === 'color')
+    item && (item.folderId === 'palette' || item.folderId === 'colors' || item.isPalette || item.type === 'color' || item.category === 'palette' || item.category === 'colors')
   );
 
   if (paletteStock.length === 0) {
-    ['dim47_colors', 'palette', 'colors'].forEach(key => {
+    ['dim47_colors', 'palette', 'colors', 'dim47_palette'].forEach(key => {
       try {
         const savedColors = localStorage.getItem(key);
         if (savedColors) {
@@ -61,6 +62,11 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         }
       } catch (e) {}
     });
+  }
+
+  // Якщо палітра все ще порожня, беремо весь склад, щоб користувач міг вибрати хоч щось
+  if (paletteStock.length === 0) {
+    paletteStock = currentStock;
   }
 
   const shoesStock = currentStock.filter(item => item && (item.folderId === 'shoes' || (!item.folderId && !paletteStock.includes(item))));
@@ -74,29 +80,60 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setSmartText(text);
     if (!text.trim()) return;
 
+    // Витягуємо телефон
     const phoneMatch = text.match(/(\+?38)?0\d{9}/);
-    if (phoneMatch) setPhone(phoneMatch[0]);
+    if (phoneMatch) {
+      setPhone(phoneMatch[0]);
+    }
 
-    const parts = text.split(/,|\n/).map(p => p.trim()).filter(Boolean);
+    // Очищаємо текст від телефону для подальшого аналізу
+    let cleanText = text.replace(/(\+?38)?0\d{9}/g, '').trim();
+
+    // Шукаємо місто (наприклад, "м. Нововолинськ", "місто Київ" тощо)
+    const cityMatch = cleanText.match(/(?:м\.|місто)\s*([А-ЯІЄЇҐ][а-яієїґ]+)/i);
+    let extractedCity = '';
+    if (cityMatch) {
+      extractedCity = cityMatch[0];
+      setCity(cityMatch[1]); // запишемо чисту назву або повну
+      cleanText = cleanText.replace(cityMatch[0], '').trim();
+    } else {
+      // Спробуємо знайти слова, схожі на міста/області, якщо явно не вказано "м."
+      const parts = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
+      parts.forEach(part => {
+        if (/Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-|Чернівц|Ужгород|Хмельницьк|Вінниц|Черкас|Полтав|Суми|Запоріжжя|Миколаїв|Кропивницьк|Луцьк|Чернігів/i.test(part)) {
+          extractedCity = part.replace(/місто|м\./gi, '').trim();
+          setCity(extractedCity);
+          cleanText = cleanText.replace(part, '').trim();
+        }
+      });
+    }
+
+    // Шукаємо відділення пошти
+    const addressMatch = cleanText.match(/(?:відділення|нп|пошта|№)[\w\s\d.-]+/i) || cleanText.match(/НП\s*№?\d+/i);
+    if (addressMatch) {
+      setAddress(addressMatch[0].trim());
+      cleanText = cleanText.replace(addressMatch[0], '').trim();
+    }
+
+    // Все, що залишилося на початку (або перші слова) — це ПІБ клієнта
+    cleanText = cleanText.replace(/відділення|НП|область|району|або/gi, '').replace(/\s{2,}/g, ' ').trim();
+    const words = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
     
-    parts.forEach(part => {
-      if (/відділенн|пошт|№|\b\d{1,3}\b/i.test(part) && !part.match(/(\+?38)?0\d{9}/)) {
-        setAddress(part);
-      } else if (!clientName && parts.indexOf(part) === 0) {
-        setClientName(part);
-      } else if (!city && ( /місто|м\.|м /i.test(part) || parts.indexOf(part) === 1 )) {
-        setCity(part.replace(/місто|м\./gi, '').trim());
-      } else if (!city) {
-        setCity(part);
+    if (words.length > 0) {
+      // Перший шматок зазвичай ПІБ
+      let potentialName = words.find(w => w.split(' ').length >= 2) || words[0];
+      if (potentialName) {
+        setClientName(potentialName.trim());
+        cleanText = cleanText.replace(potentialName, '').trim();
       }
-    });
+    }
 
-    if (parts.length >= 3) {
-      if (!clientName) setClientName(parts[0]);
-      if (!phone && phoneMatch) setPhone(phoneMatch[0]);
-      const remaining = parts.filter(p => !p.includes(phoneMatch?.[0]) && p !== parts[0]);
-      if (remaining.length > 0 && !city) setCity(remaining[0]);
-      if (remaining.length > 1 && !address) setAddress(remaining[1]);
+    // Якщо адреса ще не знайдена, але залишились шматки тексту (наприклад, вулиця чи номер)
+    if (!address) {
+      const remainingParts = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
+      if (remainingParts.length > 0) {
+        setAddress(remainingParts.join(', '));
+      }
     }
   };
 
@@ -370,7 +407,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                 })
               ) : (
                 <div className="col-span-3 py-8 text-center text-xs text-slate-400">
-                  {activeImageType === 'color' ? 'Папка палітри порожня' : 'Склад порожній'}
+                  Склад або палітра порожні
                 </div>
               )}
             </div>

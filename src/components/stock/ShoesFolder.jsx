@@ -10,6 +10,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
   const [formSize, setFormSize] = useState('');
   const [formColor, setFormColor] = useState('');
   const [formMaterial, setFormMaterial] = useState('');
+  const [formLining, setFormLining] = useState('байка'); // Поле для наповнення (підкладки)
   const [formSole, setFormSole] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formSalePrice, setFormSalePrice] = useState('');
@@ -27,6 +28,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     setFormSize('');
     setFormColor('');
     setFormMaterial('');
+    setFormLining('байка');
     setFormSole('');
     setFormPrice('');
     setFormSalePrice('');
@@ -43,6 +45,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     setFormSize(item.size || '');
     setFormColor(item.color || '');
     setFormMaterial(item.material || '');
+    setFormLining(item.lining || 'байка');
     setFormSole(item.sole || '');
     setFormPrice(item.price !== '' ? item.price : '');
     setFormSalePrice(item.salePrice !== '' ? item.salePrice : '');
@@ -70,6 +73,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
       size: formSize,
       color: formColor,
       material: formMaterial,
+      lining: formLining,
       sole: formSole,
       price: formPrice !== '' ? Number(formPrice) : '',
       salePrice: formSalePrice !== '' ? Number(formSalePrice) : '',
@@ -94,6 +98,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     <div className="space-y-4">
       {/* Кнопка додавання на всю ширину */}
       <button 
+        type="button"
         onClick={handleOpenAddModal}
         className="w-full py-3 bg-[#0B132B] hover:bg-[#1C2541] text-white rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
       >
@@ -117,6 +122,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
           {['усі', 'Демісезон', 'Зима', 'Літо'].map((season) => (
             <button
               key={season}
+              type="button"
               onClick={() => setSelectedSeason(season)}
               className={`px-3 py-1.5 rounded-xl text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
                 selectedSeason === season 
@@ -147,6 +153,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                 </strong>
                 <div className="flex items-center gap-0.5 flex-shrink-0">
                   <button 
+                    type="button"
                     onClick={(e) => handleOpenEditModal(item, e)}
                     className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition"
                     title="Редагувати"
@@ -154,6 +161,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                     <Edit3 size={15} />
                   </button>
                   <button 
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id); }}
                     className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
                     title="Видалити"
@@ -174,6 +182,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                   {item.size && <span className="text-slate-600">Розмір: <span className="font-medium text-slate-900">{item.size}</span></span>}
                   {item.color && <span className="text-slate-600">Колір: <span className="font-medium text-slate-900">{item.color}</span></span>}
                   {item.material && <span className="text-slate-600">Матеріал: <span className="font-medium text-slate-900">{item.material}</span></span>}
+                  {item.lining && <span className="text-slate-600">Наповнення: <span className="font-medium text-slate-900">{item.lining}</span></span>}
                 </div>
               </div>
             </div>
@@ -188,7 +197,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
               <h2 className="text-lg font-bold text-slate-900">
                 {editingItem ? 'Редагувати зразок взуття' : 'Додати зразок взуття'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={20}/></button>
+              <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={20}/></button>
             </div>
             <form onSubmit={handleSave} className="flex flex-col gap-3">
               <div>
@@ -223,9 +232,22 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                   <input type="text" value={formMaterial} onChange={e => setFormMaterial(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. шкіра" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Підошва</label>
-                  <input type="text" value={formSole} onChange={e => setFormSole(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. трактор" />
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Наповнення (підкладка)</label>
+                  <select
+                    value={formLining}
+                    onChange={e => setFormLining(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl text-xs bg-white"
+                  >
+                    <option value="байка">Байка</option>
+                    <option value="хутро">Хутро</option>
+                    <option value="шкірпідклад">Шкірпідклад</option>
+                    <option value="без підкладки">Без підкладки</option>
+                  </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Підошва</label>
+                <input type="text" value={formSole} onChange={e => setFormSole(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. трактор" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>

@@ -54,18 +54,15 @@ export default function Dashboard() {
       if (compA !== compB) {
         return compA ? 1 : -1;
       }
-      
-      const dateA = a.createdAt || '';
-      const dateB = b.createdAt || '';
 
       if (!compA) {
-        // ДЛЯ АКТИВНИХ («Нове», «В роботі»): найстаріші (перші) ЗВЕРХУ (від старіших до новіших)
-        if (dateA !== dateB) {
-          return dateA.localeCompare(dateB);
-        }
+        // ДЛЯ АКТИВНИХ («Нове», «В роботі»): сортуємо за ID від старіших до новіших.
+        // Перше створене замовлення на сайті завжди буде на самому верху!
         return a.id.localeCompare(b.id);
       } else {
-        // ДЛЯ ЗАВЕРШЕНИХ («Доставка», «Відмова»): найновіші ЗВЕРХУ (від новіших до старіших)
+        // ДЛЯ ЗАВЕРШЕНИХ («Доставка», «Відмова`): найновіші зверху
+        const dateA = a.createdAt || '';
+        const dateB = b.createdAt || '';
         if (dateA !== dateB) {
           return dateB.localeCompare(dateA);
         }

@@ -18,15 +18,17 @@ export default function NewOrderModal({
   formColorText, setFormColorText,
   formMaterial, setFormMaterial,
   formSole, setFormSole,
+  formFilling, setFormFilling, // Додано пропс для наповнення (байка/хутро)
   formPrice, setFormPrice,
   formProductImage, setFormProductImage,
   formColorImage, setFormColorImage
 }) {
   const [smartInputText, setSmartInputText] = useState('');
+  const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
 
-  // Функція розумного розбору вставленого тексту
+  // Розумний розбір тексту
   const handleSmartParse = (text) => {
     setSmartInputText(text);
     if (!text.trim()) return;
@@ -58,6 +60,14 @@ export default function NewOrderModal({
         setFormCity(possibleCity);
       }
     }
+  };
+
+  // Копіювання всіх даних клієнта однією кнопкою
+  const handleCopyClientData = () => {
+    const textToCopy = `Клієнт: ${formClientName || '—'}\nТелефон: ${formClientPhone || '—'}\nМісто: ${formCity || '—'}\nВідділення: ${formWarehouse || '—'}`;
+    navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -96,17 +106,25 @@ export default function NewOrderModal({
 
           {/* Дані клієнта */}
           <div className="space-y-3">
-            <div>
-              <label className="block text-[11px] font-medium text-slate-600 mb-1">Ім'я клієнта (ПІБ)</label>
-              <input
-                type="text"
-                value={formClientName}
-                onChange={(e) => setFormClientName(e.target.value)}
-                placeholder="ПІБ клієнта"
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                required
-              />
+            <div className="flex justify-between items-center">
+              <label className="block text-[11px] font-medium text-slate-600">Ім'я клієнта (ПІБ)</label>
+              <button
+                type="button"
+                onClick={handleCopyClientData}
+                className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-lg transition font-medium cursor-pointer flex items-center gap-1"
+              >
+                📋 {copied ? 'Скопійовано!' : 'Скопіювати дані клієнта'}
+              </button>
             </div>
+            
+            <input
+              type="text"
+              value={formClientName}
+              onChange={(e) => setFormClientName(e.target.value)}
+              placeholder="ПІБ клієнта"
+              className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              required
+            />
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -194,15 +212,27 @@ export default function NewOrderModal({
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-slate-600 mb-1">Підошва / Наповнення</label>
+                <label className="block text-[11px] font-medium text-slate-600 mb-1">Підошва</label>
                 <input
                   type="text"
                   value={formSole}
                   onChange={(e) => setFormSole(e.target.value)}
-                  placeholder="Напр. трактор / байка"
+                  placeholder="Напр. трактор"
                   className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
+            </div>
+
+            {/* НОВЕ ПОЛЕ ДЛЯ НАПОВНЕННЯ */}
+            <div>
+              <label className="block text-[11px] font-medium text-slate-600 mb-1">Наповнення (байка / хутро / демі)</label>
+              <input
+                type="text"
+                value={formFilling}
+                onChange={(e) => setFormFilling(e.target.value)}
+                placeholder="Напр. байка"
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -224,6 +254,18 @@ export default function NewOrderModal({
                   className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
+            </div>
+
+            {/* НОТАТКА */}
+            <div>
+              <label className="block text-[11px] font-medium text-slate-600 mb-1">💬 Нотатка до замовлення</label>
+              <textarea
+                rows="2"
+                value={formNote}
+                onChange={(e) => setFormNote(e.target.value)}
+                placeholder="Додаткові побажання клієнта..."
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
             </div>
           </div>
 

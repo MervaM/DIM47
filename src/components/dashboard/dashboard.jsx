@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [formColorText, setFormColorText] = useState('');
   const [formMaterial, setFormMaterial] = useState('');
   const [formSole, setFormSole] = useState('');
+  const [formFilling, setFormFilling] = useState(''); // Поле для наповнення (байка/хутро)
   const [formPrice, setFormPrice] = useState('2500');
   const [formProductImage, setFormProductImage] = useState('');
   const [formColorImage, setFormColorImage] = useState('');
@@ -55,18 +56,15 @@ export default function Dashboard() {
         return compA ? 1 : -1;
       }
 
-      // Базова дата для замовлень без createdAt (щоб найперші завжди були зверху)
       const dateA = a.createdAt || '2025-01-01T00:00:00.000Z';
       const dateB = b.createdAt || '2025-01-01T00:00:00.000Z';
 
       if (!compA) {
-        // ДЛЯ АКТИВНИХ («Нове», «В роботі»): від найстаріших до найновіших (найперше зверху)
         if (dateA !== dateB) {
           return dateA.localeCompare(dateB);
         }
         return a.id.localeCompare(b.id);
       } else {
-        // ДЛЯ ЗАВЕРШЕНИХ («Доставка», «Відмова»): від найновіших до найстаріших (щойно доставлені зверху)
         if (dateA !== dateB) {
           return dateB.localeCompare(dateA);
         }
@@ -104,11 +102,12 @@ export default function Dashboard() {
           colorText: item.colorText || item.color_text || '',
           material: item.material || '',
           sole: item.sole || '',
+          filling: item.filling || '',
           price: item.price !== undefined ? item.price : 0,
           image: item.productImage || item.image || '',
           colorImage: item.colorImage || item.color_image || '',
           createdAt: item.createdAt || '',
-          productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color_text || '—'}, ${item.material || '—'}, ${item.sole || '—'}`
+          productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || ''}, ${item.material || ''}, ${item.filling || item.sole || ''}`
         });
       });
 
@@ -136,6 +135,7 @@ export default function Dashboard() {
     setFormColorText('');
     setFormMaterial('');
     setFormSole('');
+    setFormFilling('');
     setFormPrice('2500');
     setFormProductImage('');
     setFormColorImage('');
@@ -157,6 +157,7 @@ export default function Dashboard() {
     setFormColorText(order.colorText || '');
     setFormMaterial(order.material || '');
     setFormSole(order.sole || '');
+    setFormFilling(order.filling || '');
     setFormPrice(order.price || '2500');
     setFormProductImage(order.image || '');
     setFormColorImage(order.colorImage || '');
@@ -185,10 +186,11 @@ export default function Dashboard() {
       colorText: formColorText,
       material: formMaterial,
       sole: formSole,
+      filling: formFilling,
       price: Number(formPrice) || 0,
       productImage: formProductImage || '',
       colorImage: formColorImage || '',
-      productDetails: `${formSize || '—'} розм., ${formColorText || '—'}, ${formMaterial || '—'}, ${formSole || '—'}`
+      productDetails: `${formSize || '—'} розм., ${formColorText || '—'}, ${formMaterial || '—'}, ${formFilling || formSole || '—'}`
     };
 
     try {
@@ -270,7 +272,7 @@ export default function Dashboard() {
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
                 isActive 
                   ? 'bg-slate-900 text-white shadow-xs' 
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-550'
               }`}
             >
               <span>{status}</span>
@@ -315,6 +317,7 @@ export default function Dashboard() {
         formColorText={formColorText} setFormColorText={setFormColorText}
         formMaterial={formMaterial} setFormMaterial={setFormMaterial}
         formSole={formSole} setFormSole={setFormSole}
+        formFilling={formFilling} setFormFilling={setFormFilling}
         formPrice={formPrice} setFormPrice={setFormPrice}
         formProductImage={formProductImage} setFormProductImage={setFormProductImage}
         formColorImage={formColorImage} setFormColorImage={setFormColorImage}

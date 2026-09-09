@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, Search, Image as ImageIcon } from 'lucide-react';
+import { X, Upload, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
 
 export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [name, setName] = useState('');
@@ -9,14 +9,18 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [material, setMaterial] = useState('');
   const [sole, setSole] = useState('');
   const [color, setColor] = useState('');
+  const [lining, setLining] = useState(''); // Наповнення (байка / хутро)
+  
   const [clientName, setClientName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
+  const [smartText, setSmartText] = useState(''); // Поле для розумного введення
+  
   const [paymentType, setPaymentType] = useState('Передплата');
   const [advance, setAdvance] = useState('');
   const [discount, setDiscount] = useState('0');
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState(''); // Поле для коментаря
   const [price, setPrice] = useState('');
 
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
@@ -50,6 +54,51 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     item && item.name && item.name.toLowerCase().includes(name.toLowerCase())
   );
 
+  // Розумне розбирання тексту клієнта
+  const handleSmartClientParse = (text) => {
+    setSmartText(text);
+    if (!text.trim()) return;
+
+    // Шукаємо телефон (формати з +380 або просто 0...)
+    const phoneMatch = text.match(/(\+?38)?0\d{9}/);
+    if (phoneMatch) {
+      setPhone(phoneMatch[0]);
+    }
+
+    // Розбиваємо текст за комами або переносів рядків
+    const parts = text.split(/,|\n/).map(p => p.trim()).filter(Boolean);
+    
+    // Пробуємо витягнути ПІБ, місто, відділення
+    parts.forEach(part => {
+      // Якщо містить цифри і схоже на відділення / пошту
+      if (/відділенн|пошт|№|\b\d{1,3}\b/i.test(part) && !part.match(/(\+?38)?0\d{9}/)) {
+        setAddress(part);
+      } 
+      // Якщо це схоже на телефон - пропускаємо, бо вже знайшли
+      else if (part.match(/(\+?38)?0\d{9}/)) {
+        // вже оброблено
+      }
+      // Якщо містить букви і довше за 2 символи, вирішуємо чи це ПІБ чи місто
+      else if (!clientName && parts.indexOf(part) === 0) {
+        setClientName(part);
+      } else if (!city && ( /місто|м\.|м /i.test(part) || parts.indexOf(part) === 1 )) {
+        setCity(part.replace(/місто|м\./gi, '').trim());
+      } else if (!city) {
+        setCity(part);
+      }
+    });
+
+    // Альтернативний простий розклад через кому, якщо вище не заповнилось
+    if (parts.length >= 3) {
+      if (!clientName) setClientName(parts[0]);
+      if (!phone && phoneMatch) setPhone(phoneMatch[0]);
+      // Знаходимо частину без телефону та не першу
+      const remaining = parts.filter(p => !p.includes(phoneMatch?.[0]) && p !== parts[0]);
+      if (remaining.length > 0 && !city) setCity(remaining[0]);
+      if (remaining.length > 1 && !address) setAddress(remaining[1]);
+    }
+  };
+
   const handleSelectProductFromStock = (product) => {
     setName(product.name || '');
     const prodImg = product.image || product.photo || product.img || product.colorImage;
@@ -59,6 +108,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (product.material) setMaterial(product.material);
     if (product.sole) setSole(product.sole);
     if (product.color) setColor(product.color);
+    if (product.lining) setLining(product.lining);
     setIsProductDropdownOpen(false);
   };
 
@@ -85,6 +135,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       if (product.material) setMaterial(product.material);
       if (product.sole) setSole(product.sole);
       if (product.color) setColor(product.color);
+      if (product.lining) setLining(product.lining);
     } else if (activeImageType === 'color') {
       if (imgUrl) setColorImage(imgUrl);
     }
@@ -103,6 +154,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       material,
       sole,
       color,
+      lining,
       clientName,
       phone,
       city,
@@ -134,9 +186,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           
+          {/* Фото товару та зразок кольору */}
           <div className="grid grid-cols-2 gap-3">
             
-            {/* Фото товару */}
             <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2.5">
               <span className="text-xs font-semibold text-slate-700">Фото товару</span>
               {image ? (
@@ -160,7 +212,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               </div>
             </div>
 
-            {/* Зразок кольору */}
             <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2.5">
               <span className="text-xs font-semibold text-slate-700">Зразок кольору</span>
               {colorImage ? (
@@ -186,6 +237,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
           </div>
 
+          {/* Назва товару */}
           <div className="relative space-y-1">
             <label className="text-xs font-semibold text-slate-600">Назва товару</label>
             <div className="relative">
@@ -230,6 +282,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
+          {/* Характеристики товару (включно з байка / хутро) */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
             <div className="grid grid-cols-2 gap-2">
@@ -238,9 +291,49 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <input type="text" value={sole} onChange={(e) => setSole(e.target.value)} placeholder="Підошва" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
               <input type="text" value={color} onChange={(e) => setColor(e.target.value)} placeholder="Колір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             </div>
+            {/* Поле наповнення: байка / хутро */}
+            <div className="flex gap-2 pt-1">
+              <input 
+                type="text" 
+                value={lining} 
+                onChange={(e) => setLining(e.target.value)} 
+                placeholder="Наповнення (байка / хутро)" 
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" 
+              />
+              <button 
+                type="button" 
+                onClick={() => setLining('байка')} 
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-medium cursor-pointer"
+              >
+                Байка
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setLining('хутро')} 
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-medium cursor-pointer"
+              >
+                Хутро
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-3 pt-2 border-t border-slate-100">
+          {/* Розумне введення даних клієнта */}
+          <div className="space-y-1 pt-2 border-t border-slate-100">
+            <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+              <Wand2 size={14} className="text-amber-600" />
+              Розумне введення даних клієнта (скопіюйте текст сюди)
+            </label>
+            <textarea
+              rows="2"
+              value={smartText}
+              onChange={(e) => handleSmartClientParse(e.target.value)}
+              placeholder="Вставте сюди весь текст від клієнта (ПІБ, телефон, місто, відділення)..."
+              className="w-full px-3 py-2 bg-amber-50/40 border border-amber-200/70 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            />
+          </div>
+
+          {/* Дані клієнта */}
+          <div className="space-y-2">
             <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Ім'я клієнта (ПІБ)" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required />
             <div className="grid grid-cols-2 gap-2">
               <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Телефон (+380...)" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
@@ -249,6 +342,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Відділення / Адреса" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
           </div>
 
+          {/* Ціна та передплата */}
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
             <div>
               <label className="text-[11px] font-semibold text-slate-500">Вартість товару (грн)</label>
@@ -260,13 +354,26 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             </div>
           </div>
 
-          <div className="flex gap-2 pt-4">
+          {/* Поле для коментаря */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-600">Коментар до замовлення</label>
+            <textarea
+              rows="2"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Додаткові побажання або примітки..."
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">Скасувати</button>
             <button type="submit" className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer">Зберегти</button>
           </div>
         </form>
       </div>
 
+      {/* Модалка вибору фото зі складу */}
       {isStockImagesOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col">

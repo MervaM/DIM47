@@ -36,7 +36,7 @@ export default function Dashboard() {
   const [orders, setOrders] = useState([]);
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Захист від подвійного кліку
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Відмова'];
 
@@ -56,8 +56,10 @@ export default function Dashboard() {
       }
 
       if (!compA) {
+        // ДЛЯ АКТИВНИХ («Нове», «В роботі»): ПРЯМИЙ порядок за ID (найстаріші зверху)
         return a.id.localeCompare(b.id);
       } else {
+        // ДЛЯ ЗАВЕРШЕНИХ («Доставка», «Відмова»): ЗВОРОТНИЙ порядок (найновіші зверху)
         const dateA = a.createdAt || '';
         const dateB = b.createdAt || '';
         if (dateA !== dateB) {
@@ -136,7 +138,6 @@ export default function Dashboard() {
   };
 
   const handleEditOrder = (order) => {
-    console.log("Редагування замовлення з ID:", order.id); // Для перевірки в консолі
     setEditingId(order.id);
     setFormClientName(order.client || '');
     setFormClientPhone(order.phone || '');
@@ -162,8 +163,7 @@ export default function Dashboard() {
       e.preventDefault();
     }
 
-    if (isSubmitting) return; // Запобігаємо подвійному кліку
-
+    if (isSubmitting) return;
     setIsSubmitting(true);
     
     const dbPayload = {
@@ -188,11 +188,9 @@ export default function Dashboard() {
 
     try {
       if (editingId) {
-        console.label ? console.label("Оновлюємо існуюче замовлення:", editingId) : console.log("Оновлюємо існуюче замовлення:", editingId);
         const orderRef = doc(db, "orders", editingId);
         await updateDoc(orderRef, dbPayload);
       } else {
-        console.log("Створюємо нове замовлення");
         const newDbPayload = {
           ...dbPayload,
           date: new Date().toLocaleDateString('uk-UA'),

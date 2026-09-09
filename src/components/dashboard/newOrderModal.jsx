@@ -26,13 +26,26 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const fileInputRef = useRef(null);
   const colorFileInputRef = useRef(null);
 
-  const filteredStockProducts = stock.filter(item => 
+  // Беріть дані з пропсов або напряму з localStorage без зайвих useEffect
+  let currentStock = stock;
+  if (!currentStock || currentStock.length === 0) {
+    try {
+      const savedShoes = JSON.parse(localStorage.getItem('shoes')) || [];
+      const savedStock = JSON.parse(localStorage.getItem('stock')) || [];
+      currentStock = [...savedShoes, ...savedStock];
+    } catch (e) {
+      currentStock = [];
+    }
+  }
+
+  const filteredStockProducts = currentStock.filter(item => 
     item.name && item.name.toLowerCase().includes(name.toLowerCase())
   );
 
   const handleSelectProductFromStock = (product) => {
     setName(product.name || '');
-    if (product.image) setImage(product.image);
+    const prodImg = product.image || product.photo || product.img;
+    if (prodImg) setImage(prodImg);
     if (product.price) setPrice(product.price);
     if (product.size) setSize(product.size);
     if (product.material) setMaterial(product.material);
@@ -101,7 +114,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* ФОТО ТОВАРУ ТА ЗРАЗОК КОЛЬОРУ (один під одним, іконки знизу) */}
           <div className="grid grid-cols-2 gap-3">
             
             {/* Фото товару */}
@@ -154,7 +166,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
           </div>
 
-          {/* Назва товару з пошуком */}
           <div className="relative space-y-1">
             <label className="text-xs font-semibold text-slate-600">Назва товару</label>
             <div className="relative">
@@ -175,28 +186,30 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
             {isProductDropdownOpen && filteredStockProducts.length > 0 && (
               <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                {filteredStockProducts.map((prod) => (
-                  <div
-                    key={prod.id}
-                    onClick={() => handleSelectProductFromStock(prod)}
-                    className="flex items-center gap-3 p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none transition"
-                  >
-                    {prod.image ? (
-                      <img src={prod.image} alt="" className="w-9 h-9 object-cover rounded-lg border" />
-                    ) : (
-                      <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Фото</div>
-                    )}
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">{prod.name}</div>
-                      <div className="text-[11px] text-slate-500">{prod.price ? `${prod.price} грн` : ''} {prod.color ? `• ${prod.color}` : ''}</div>
+                {filteredStockProducts.map((prod) => {
+                  const prodImg = prod.image || prod.photo || prod.img;
+                  return (
+                    <div
+                      key={prod.id || Math.random()}
+                      onClick={() => handleSelectProductFromStock(prod)}
+                      className="flex items-center gap-3 p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none transition"
+                    >
+                      {prodImg ? (
+                        <img src={prodImg} alt="" className="w-9 h-9 object-cover rounded-lg border" />
+                      ) : (
+                        <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Фото</div>
+                      )}
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">{prod.name}</div>
+                        <div className="text-[11px] text-slate-500">{prod.price ? `${prod.price} грн` : ''} {prod.color ? `• ${prod.color}` : ''}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* Характеристики */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
             <div className="grid grid-cols-2 gap-2">
@@ -207,7 +220,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             </div>
           </div>
 
-          {/* Клієнт */}
           <div className="space-y-3 pt-2 border-t border-slate-100">
             <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Ім'я клієнта (ПІБ)" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required />
             <div className="grid grid-cols-2 gap-2">
@@ -217,7 +229,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Відділення / Адреса" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
           </div>
 
-          {/* Оплата */}
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
             <div>
               <label className="text-[11px] font-semibold text-slate-500">Вартість товару (грн)</label>
@@ -243,17 +254,30 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <h3 className="font-bold text-slate-900 text-sm">Виберіть зображення зі складу</h3>
               <button onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
-            <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1">
-              {stock.filter(item => item.image || item.colorImage).map((item) => (
-                <div key={item.id}>
-                  {item.image && (
-                    <div onClick={() => handleSelectImageFromStock(item.image)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
-                      <img src={item.image} alt="" className="w-full h-full object-cover" />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Фото'}</div>
+            <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1 max-h-96">
+              {currentStock.length > 0 ? (
+                currentStock.map((item, index) => {
+                  const img = item.image || item.photo || item.img || item.colorImage;
+                  return (
+                    <div key={item.id || index}>
+                      {img ? (
+                        <div onClick={() => handleSelectImageFromStock(img)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
+                          <img src={img} alt="" className="w-full h-full object-cover" />
+                          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Товар'}</div>
+                        </div>
+                      ) : (
+                        <div className="border border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50">
+                          {item.name || 'Без фото'}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  );
+                })
+              ) : (
+                <div className="col-span-3 py-8 text-center text-xs text-slate-400">
+                  Склад порожній
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>

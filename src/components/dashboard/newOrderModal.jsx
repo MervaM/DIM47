@@ -1,351 +1,263 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
+import { X, Upload, Search, Image as ImageIcon } from 'lucide-react';
 
-export default function NewOrderModal({ isOpen, onClose, onSave, orderToEdit, stockItems = [] }) {
-  const [smartText, setSmartText] = useState('');
-  const [formData, setFormData] = useState({
-    clientName: '',
-    phone: '',
-    city: '',
-    warehouse: '',
-    productTitle: '',
-    size: '',
-    color: '',
-    material: '',
-    sole: '',
-    lining: '',
-    price: '',
-    advance: '',
-    comment: '',
-    image: '',
-    status: 'Нове'
-  });
+export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
+  const [name, setName] = useState('');
+  const [image, setImage] = useState('');
+  const [colorImage, setColorImage] = useState('');
+  const [size, setSize] = useState('');
+  const [material, setMaterial] = useState('');
+  const [sole, setSole] = useState('');
+  const [color, setColor] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('');
+  const [address, setAddress] = useState('');
+  const [paymentType, setPaymentType] = useState('Передплата');
+  const [advance, setAdvance] = useState('');
+  const [discount, setDiscount] = useState('0');
+  const [comment, setComment] = useState('');
+  const [price, setPrice] = useState('');
 
-  useEffect(() => {
-    if (orderToEdit) {
-      setFormData({
-        ...orderToEdit,
-        clientName: orderToEdit.client || orderToEdit.clientName || '',
-        phone: orderToEdit.phone || orderToEdit.clientPhone || '',
-      });
-    } else {
-      setFormData({
-        clientName: '',
-        phone: '',
-        city: '',
-        warehouse: '',
-        productTitle: '',
-        size: '',
-        color: '',
-        material: '',
-        sole: '',
-        lining: '',
-        price: '',
-        advance: '',
-        comment: '',
-        image: '',
-        status: 'Нове'
-      });
-    }
-    setSmartText('');
-  }, [orderToEdit, isOpen]);
+  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
+  const [isStockImagesOpen, setIsStockImagesOpen] = useState(false);
+  const [activeImageType, setActiveImageType] = useState(null);
 
-  if (!isOpen) return null;
+  const fileInputRef = useRef(null);
+  const colorFileInputRef = useRef(null);
 
-  const handleSmartParse = (text) => {
-    setSmartText(text);
-    if (!text.trim()) return;
+  const filteredStockProducts = stock.filter(item => 
+    item.name && item.name.toLowerCase().includes(name.toLowerCase())
+  );
 
-    const phoneMatch = text.match(/(\+?38)?0\d{9}/);
-    const phone = phoneMatch ? phoneMatch[0] : '';
-
-    setFormData(prev => ({
-      ...prev,
-      phone: phone || prev.phone,
-      clientName: prev.clientName || text.split(',')[0] || ''
-    }));
+  const handleSelectProductFromStock = (product) => {
+    setName(product.name || '');
+    if (product.image) setImage(product.image);
+    if (product.price) setPrice(product.price);
+    if (product.size) setSize(product.size);
+    if (product.material) setMaterial(product.material);
+    if (product.sole) setSole(product.sole);
+    if (product.color) setColor(product.color);
+    setIsProductDropdownOpen(false);
   };
 
-  // Вибір моделі зі складу через картку/кнопку
-  const handleSelectStockItem = (item) => {
-    setFormData(prev => ({
-      ...prev,
-      productTitle: item.title || prev.productTitle,
-      color: item.color || prev.color,
-      material: item.material || prev.material,
-      image: item.image || prev.image,
-      price: item.price || prev.price
-    }));
-  };
-
-  // Завантаження фото з пристрою
-  const handleImageUpload = (e) => {
+  const handleFileUpload = (e, type) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, image: reader.result }));
+        if (type === 'product') setImage(reader.result);
+        else setColorImage(reader.result);
       };
       reader.readAsDataURL(file);
     }
   };
 
+  const handleSelectImageFromStock = (imgUrl) => {
+    if (activeImageType === 'product') setImage(imgUrl);
+    else if (activeImageType === 'color') setColorImage(imgUrl);
+    setIsStockImagesOpen(false);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    const detailsArr = [
-      formData.size ? `${formData.size} розм.` : '',
-      formData.color,
-      formData.material,
-      formData.sole,
-      formData.lining
-    ].filter(Boolean).join(', ');
-
-    onSave({
-      ...formData,
-      productDetails: detailsArr,
-      price: Number(formData.price) || 0,
-      advance: Number(formData.advance) || 0,
-    });
+    const newOrder = {
+      id: Date.now(),
+      name,
+      image,
+      colorImage,
+      size,
+      material,
+      sole,
+      color,
+      clientName,
+      phone,
+      city,
+      address,
+      paymentType,
+      advance: Number(advance) || 0,
+      discount: Number(discount) || 0,
+      comment,
+      price: Number(price) || 0,
+      status: 'нове',
+      createdAt: new Date().toISOString()
+    };
+    onSave(newOrder);
     onClose();
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 relative shadow-xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 relative my-8 space-y-5">
         
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-          <h2 className="text-base font-bold text-slate-900">
-            {orderToEdit ? 'Редагувати замовлення' : 'Нове замовлення'}
-          </h2>
-          <button 
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-sm font-bold px-2 py-1 cursor-pointer"
-          >
-            ✕
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <h2 className="text-xl font-bold text-slate-900">Нове замовлення</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+            <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* Розумне введення */}
-          {!orderToEdit && (
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-1.5">
-              <label className="text-[11px] font-bold text-amber-800 flex items-center gap-1">
-                🪄 Розумне введення даних клієнта (скопіюйте сюди текст)
-              </label>
-              <textarea 
-                rows="2"
-                value={smartText}
-                onChange={(e) => handleSmartParse(e.target.value)}
-                placeholder="Наприклад: Мошовська Марія, 050 986 88 06, Київ, відділення 83"
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-400 text-xs"
-              />
+          {/* ФОТО ТОВАРУ ТА ЗРАЗОК КОЛЬОРУ (один під одним, іконки знизу) */}
+          <div className="grid grid-cols-2 gap-3">
+            
+            {/* Фото товару */}
+            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2.5">
+              <span className="text-xs font-semibold text-slate-700">Фото товару</span>
+              {image ? (
+                <div className="relative w-16 h-16">
+                  <img src={image} alt="Товар" className="w-16 h-16 object-cover rounded-lg border shadow-xs" />
+                  <button type="button" onClick={() => setImage('')} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 shadow-xs"><X size={12}/></button>
+                </div>
+              ) : (
+                <div className="w-16 h-16 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400">
+                  <ImageIcon size={24} />
+                </div>
+              )}
+              <div className="flex gap-1.5 w-full justify-center">
+                <input type="file" ref={fileInputRef} onChange={(e) => handleFileUpload(e, 'product')} className="hidden" accept="image/*" />
+                <button type="button" title="Завантажити з пристрою" onClick={() => fileInputRef.current.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                  <Upload size={16} />
+                </button>
+                <button type="button" title="Вибрати зі складу" onClick={() => { setActiveImageType('product'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                  <Search size={16} />
+                </button>
+              </div>
             </div>
-          )}
+
+            {/* Зразок кольору */}
+            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2.5">
+              <span className="text-xs font-semibold text-slate-700">Зразок кольору</span>
+              {colorImage ? (
+                <div className="relative w-16 h-16">
+                  <img src={colorImage} alt="Колір" className="w-16 h-16 object-cover rounded-lg border shadow-xs" />
+                  <button type="button" onClick={() => setColorImage('')} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 shadow-xs"><X size={12}/></button>
+                </div>
+              ) : (
+                <div className="w-16 h-16 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400">
+                  <ImageIcon size={24} />
+                </div>
+              )}
+              <div className="flex gap-1.5 w-full justify-center">
+                <input type="file" ref={colorFileInputRef} onChange={(e) => handleFileUpload(e, 'color')} className="hidden" accept="image/*" />
+                <button type="button" title="Завантажити з пристрою" onClick={() => colorFileInputRef.current.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                  <Upload size={16} />
+                </button>
+                <button type="button" title="Вибрати зі складу" onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                  <Search size={16} />
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Назва товару з пошуком */}
+          <div className="relative space-y-1">
+            <label className="text-xs font-semibold text-slate-600">Назва товару</label>
+            <div className="relative">
+              <input 
+                type="text"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setIsProductDropdownOpen(true);
+                }}
+                onFocus={() => setIsProductDropdownOpen(true)}
+                placeholder="Назва товару (напр. Черевики)"
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                required
+              />
+              <Search className="absolute right-3 top-3 text-slate-400" size={18} />
+            </div>
+
+            {isProductDropdownOpen && filteredStockProducts.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                {filteredStockProducts.map((prod) => (
+                  <div
+                    key={prod.id}
+                    onClick={() => handleSelectProductFromStock(prod)}
+                    className="flex items-center gap-3 p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none transition"
+                  >
+                    {prod.image ? (
+                      <img src={prod.image} alt="" className="w-9 h-9 object-cover rounded-lg border" />
+                    ) : (
+                      <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Фото</div>
+                    )}
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">{prod.name}</div>
+                      <div className="text-[11px] text-slate-500">{prod.price ? `${prod.price} грн` : ''} {prod.color ? `• ${prod.color}` : ''}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Характеристики */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="Розмір (напр. 37)" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <input type="text" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Матеріал (напр. шкіра)" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <input type="text" value={sole} onChange={(e) => setSole(e.target.value)} placeholder="Підошва" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <input type="text" value={color} onChange={(e) => setColor(e.target.value)} placeholder="Колір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+            </div>
+          </div>
 
           {/* Клієнт */}
-          <div className="space-y-1">
-            <label className="font-bold text-slate-700 block">Ім'я клієнта (ПІБ)</label>
-            <input 
-              type="text"
-              required
-              value={formData.clientName}
-              onChange={(e) => setFormData({...formData, clientName: e.target.value})}
-              placeholder="ПІБ клієнта"
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-sm"
-            />
+          <div className="space-y-3 pt-2 border-t border-slate-100">
+            <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Ім'я клієнта (ПІБ)" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required />
+            <div className="grid grid-cols-2 gap-2">
+              <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Телефон (+380...)" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Місто" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+            </div>
+            <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Відділення / Адреса" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          {/* Оплата */}
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Телефон</label>
-              <input 
-                type="text"
-                required
-                value={formData.phone}
-                onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                placeholder="0991463916"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-              />
+              <label className="text-[11px] font-semibold text-slate-500">Вартість товару (грн)</label>
+              <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-emerald-700" />
             </div>
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Місто</label>
-              <input 
-                type="text"
-                required
-                value={formData.city}
-                onChange={(e) => setFormData({...formData, city: e.target.value})}
-                placeholder="Київ"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-              />
+              <label className="text-[11px] font-semibold text-slate-500">Передплата (грн)</label>
+              <input type="number" value={advance} onChange={(e) => setAdvance(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             </div>
           </div>
 
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">Відділення / Адреса доставки</label>
-            <input 
-              type="text"
-              required
-              value={formData.warehouse}
-              onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
-              placeholder="відділення 83"
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-            />
+          <div className="flex gap-2 pt-4">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">Скасувати</button>
+            <button type="submit" className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer">Зберегти</button>
           </div>
-
-          <hr className="border-slate-100" />
-
-          {/* ВІЗУАЛЬНИЙ БЛОК ВИБОРУ ТОВАРУ (як на скріншоті) */}
-          <div className="space-y-3">
-            <h3 className="font-bold text-slate-900 text-sm text-center">Вибір моделі зі складу або завантаження</h3>
-            
-            <div className="grid grid-cols-2 gap-3">
-              {/* Картка обраного або поточного товару */}
-              <div className="border border-slate-200 rounded-2xl p-3 flex flex-col items-center justify-between bg-slate-50/50">
-                <div className="w-20 h-20 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200 mb-2">
-                  {formData.image ? (
-                    <img src={formData.image} alt="Товар" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-slate-400 text-xl">🖼️</span>
-                  )}
-                </div>
-                <div className="flex gap-2 w-full justify-center">
-                  <label className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer shadow-2xs text-xs" title="Завантажити з пристрою">
-                    📤
-                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                  </label>
-                  
-                  {/* Швидкий вибір першого товару зі складу для прикладу або кнопка */}
-                  {stockItems.length > 0 && (
-                    <button 
-                      type="button"
-                      onClick={() => handleSelectStockItem(stockItems[0])}
-                      className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer shadow-2xs text-xs"
-                      title="Вибрати зі складу"
-                    >
-                      🔍
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Якщо є кілька товарів у складі, можна вивести міні-список для вибору */}
-              <div className="border border-slate-200 rounded-2xl p-3 flex flex-col justify-center space-y-1.5 bg-slate-50/50 text-[11px]">
-                <span className="font-bold text-slate-700">Швидкий вибір зі складу:</span>
-                <div className="max-h-24 overflow-y-auto space-y-1">
-                  {stockItems.length > 0 ? (
-                    stockItems.map((item, idx) => (
-                      <div 
-                        key={idx} 
-                        onClick={() => handleSelectStockItem(item)}
-                        className="p-1.5 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-amber-50 truncate font-medium"
-                      >
-                        {item.title} ({item.color || '—'})
-                      </div>
-                    ))
-                  ) : (
-                    <span className="text-slate-400">Склад порожній</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Назва товару */}
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Назва товару</label>
-              <div className="relative">
-                <input 
-                  type="text"
-                  required
-                  value={formData.productTitle}
-                  onChange={(e) => setFormData({...formData, productTitle: e.target.value})}
-                  placeholder="Мюлі"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-sm font-semibold pr-10"
-                />
-                <span className="absolute right-3 top-3 text-slate-400">🔍</span>
-              </div>
-            </div>
-
-            {/* Характеристики товару в 4 полі (як на скріншоті) */}
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Характеристики товару:</label>
-              <div className="grid grid-cols-2 gap-2">
-                <input 
-                  type="text"
-                  value={formData.size}
-                  onChange={(e) => setFormData({...formData, size: e.target.value})}
-                  placeholder="39"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-                />
-                <input 
-                  type="text"
-                  value={formData.material}
-                  onChange={(e) => setFormData({...formData, material: e.target.value})}
-                  placeholder="шкіра"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-                />
-                <input 
-                  type="text"
-                  value={formData.sole}
-                  onChange={(e) => setFormData({...formData, sole: e.target.value})}
-                  placeholder="Підошва"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-                />
-                <input 
-                  type="text"
-                  value={formData.color}
-                  onChange={(e) => setFormData({...formData, color: e.target.value})}
-                  placeholder="чорний"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-                />
-              </div>
-            </div>
-          </div>
-
-          <hr className="border-slate-100" />
-
-          {/* Ціни */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Ціна товару (грн)</label>
-              <input 
-                type="number"
-                required
-                value={formData.price}
-                onChange={(e) => setFormData({...formData, price: e.target.value})}
-                placeholder="2500"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-sm font-bold"
-              />
-            </div>
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Передплата (грн)</label>
-              <input 
-                type="number"
-                value={formData.advance}
-                onChange={(e) => setFormData({...formData, advance: e.target.value})}
-                placeholder="300"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-sm font-bold"
-              />
-            </div>
-          </div>
-
-          <div className="pt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-1/2 py-2.5 rounded-xl border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-            >
-              Скасувати
-            </button>
-            <button
-              type="submit"
-              className="w-1/2 py-2.5 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition cursor-pointer"
-            >
-              Зберегти замовлення
-            </button>
-          </div>
-
         </form>
       </div>
+
+      {isStockImagesOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">Виберіть зображення зі складу</h3>
+              <button onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1">
+              {stock.filter(item => item.image || item.colorImage).map((item) => (
+                <div key={item.id}>
+                  {item.image && (
+                    <div onClick={() => handleSelectImageFromStock(item.image)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
+                      <img src={item.image} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Фото'}</div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

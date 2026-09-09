@@ -43,12 +43,40 @@ export default function Dashboard() {
     fetchOrders();
   }, []);
 
+  const sortOrdersList = (ordersArray) => {
+    const statusPriority = {
+      'Нове': 1,
+      'В роботі': 2,
+      'Доставка': 3,
+      'Відмова': 4
+    };
+
+    return [...ordersArray].sort((a, b) => {
+      const pA = statusPriority[a.status] || 1;
+      const pB = statusPriority[b.status] || 1;
+      
+      if (pA !== pB) {
+        return pA - pB; 
+      }
+      
+      // Найновіші зверху
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      
+      if (dateA !== dateB) {
+        return dateB - dateA;
+      }
+
+      return b.id.localeCompare(a.id);
+    });
+  };
+
   const fetchOrders = async () => {
     try {
       setLoading(true);
       const querySnapshot = await getDocs(collection(db, "orders"));
       
-      const loadedOrdersMap = new Map(); // Використовуємо Map для гарантованого уникнення будь-яких дублів за ID
+      const loadedOrdersMap = new Map();
       
       querySnapshot.forEach((document) => {
         const item = document.data();
@@ -80,29 +108,8 @@ export default function Dashboard() {
         });
       });
 
-      let loadedOrders = Array.from(loadedOrdersMap.values());
-
-      // Пріоритет статусів: активні зверху, завершені (Доставка, Відмова) знизу
-      const statusPriority = {
-        'Нове': 1,
-        'В роботі': 2,
-        'Доставка': 3,
-        'Відмова': 4
-      };
-
-      loadedOrders.sort((a, b) => {
-        const pA = statusPriority[a.status] || 1;
-        const pB = statusPriority[b.status] || 1;
-        
-        if (pA !== pB) {
-          return pA - pB; 
-        }
-        
-        // Всередині однакового статусу: старіші замовлення мають бути зверху
-        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-      });
-
-      setOrders(loadedOrders);
+      const loadedOrders = Array.from(loadedOrdersMap.values());
+      setOrders(sortOrdersList(loadedOrders));
     } catch (error) {
       console.error('Помилка завантаження замовлень:', error);
     } finally {
@@ -215,17 +222,9 @@ export default function Dashboard() {
       const orderRef = doc(db, "orders", id);
       await updateDoc(orderRef, { status: newStatus });
       
-      // Локально оновлюємо та сортуємо на льоту
       setOrders(prevOrders => {
         const updated = prevOrders.map(o => o.id === id ? { ...o, status: newStatus } : o);
-        const statusPriority = { 'Нове': 1, 'В роботі': 2, 'Доставка': 3, 'Відмова': 4 };
-        
-        return updated.sort((a, b) => {
-          const pA = statusPriority[a.status] || 1;
-          const pB = statusPriority[b.status] || 1;
-          if (pA !== pB) return pA - pB;
-          return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-        });
+        return sortOrdersList(updated);
       });
     } catch (error) {
       console.error('Помилка зміни статусу:', error);

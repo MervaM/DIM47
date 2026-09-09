@@ -91,10 +91,11 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   );
 
   const handleSmartClientParse = (text) => {
-    setSmartText(text);
-    if (!text.trim()) return;
+    const rawText = String(text || '');
+    setSmartText(rawText);
+    if (!rawText.trim()) return;
 
-    let cleanText = text;
+    let cleanText = rawText;
 
     // 1. Телефон
     const phoneMatch = cleanText.match(/(\+?38)?0\d{9}/);
@@ -140,8 +141,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     const prodImg = product.image || product.photo || product.img || product.colorImage;
     if (prodImg) setImage(prodImg);
     
-    // Автопідтягування ціни та характеристик зі складу
-    if (product.price) setPrice(product.price);
+    if (product.price !== undefined) setPrice(product.price);
     if (product.material) setMaterial(product.material);
     if (product.sole) setSole(product.sole);
     if (product.color) setColor(product.color);
@@ -168,7 +168,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (activeImageType === 'product') {
       if (imgUrl) setImage(imgUrl);
       if (product.name) setName(product.name);
-      if (product.price) setPrice(product.price);
+      if (product.price !== undefined) setPrice(product.price);
     } else if (activeImageType === 'color') {
       if (imgUrl) setColorImage(imgUrl);
       if (product.name) setColor(product.name);
@@ -304,7 +304,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                         )}
                         <div className="text-xs font-bold text-slate-900">{prod.name}</div>
                       </div>
-                      {prod.price && <div className="text-xs font-semibold text-emerald-600">{prod.price} грн</div>}
+                      {prod.price !== undefined && <div className="text-xs font-semibold text-emerald-600">{prod.price} грн</div>}
                     </div>
                   );
                 })}

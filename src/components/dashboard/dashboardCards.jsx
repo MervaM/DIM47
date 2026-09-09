@@ -1,6 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function DashboardCards({ orders = [], onEdit, onDelete, onStatusChange }) {
+  const [copiedId, setCopiedId] = useState(null);
+
+  const handleCopyClient = (order, e) => {
+    e.stopPropagation();
+    const clientName = order.client || order.clientName || '—';
+    const clientPhone = order.phone || order.clientPhone || '—';
+    const city = order.city || '';
+    const warehouse = order.warehouse || '';
+    const address = [city, warehouse].filter(Boolean).join(', ') || '—';
+
+    const textToCopy = `${clientName}\n${clientPhone}\n${address}`;
+
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedId(order.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   if (!orders || orders.length === 0) {
     return (
       <div className="text-center py-10 text-slate-400 text-xs">
@@ -68,13 +85,28 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
               <p className="text-xs font-bold text-slate-900 mt-0.5">{order.productDetails}</p>
             </div>
 
-            {/* Дані покупця: ПІБ жирним, телефон, адреса у стовпчик трохи меншим шрифтом */}
-            <div className="space-y-0.5 pt-1 border-t border-slate-100">
-              <div className="text-sm font-bold text-slate-900">{order.client || order.clientName}</div>
-              <div className="text-xs text-slate-900">{order.phone || order.clientPhone}</div>
-              <div className="text-xs text-slate-900">
-                {order.city}{order.warehouse ? `, ${order.warehouse}` : ''}
+            {/* Дані покупця з кнопкою копіювання */}
+            <div className="pt-1 border-t border-slate-100 relative flex justify-between items-center">
+              <div className="space-y-0.5">
+                <div className="text-sm font-bold text-slate-900">{order.client || order.clientName}</div>
+                <div className="text-xs text-slate-900">{order.phone || order.clientPhone}</div>
+                <div className="text-xs text-slate-900">
+                  {order.city}{order.warehouse ? `, ${order.warehouse}` : ''}
+                </div>
               </div>
+
+              <button
+                type="button"
+                onClick={(e) => handleCopyClient(order, e)}
+                className={`p-2 rounded-xl text-xs transition cursor-pointer border ${
+                  copiedId === order.id 
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+                title="Скопіювати дані покупця"
+              >
+                {copiedId === order.id ? '✓' : '📋'}
+              </button>
             </div>
 
             {/* Ціна товару, передплата та залишок до сплати */}

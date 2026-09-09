@@ -50,18 +50,27 @@ export default function Dashboard() {
       const compA = isCompleted(a.status);
       const compB = isCompleted(b.status);
 
-      // Активні замовлення завжди вище за завершені (Доставка, Відмова)
+      // Активні замовлення завжди вище за завершені
       if (compA !== compB) {
         return compA ? 1 : -1;
       }
       
-      // Якщо у обох є createdAt — сортуємо за ним (найновіші зверху)
-      if (a.createdAt && b.createdAt && a.createdAt !== b.createdAt) {
-        return b.createdAt.localeCompare(a.createdAt);
+      const dateA = a.createdAt || '';
+      const dateB = b.createdAt || '';
+
+      if (!compA) {
+        // ДЛЯ АКТИВНИХ («Нове», «В роботі»): найстаріші (перші) ЗВЕРХУ (від старіших до новіших)
+        if (dateA !== dateB) {
+          return dateA.localeCompare(dateB);
+        }
+        return a.id.localeCompare(b.id);
+      } else {
+        // ДЛЯ ЗАВЕРШЕНИХ («Доставка», «Відмова»): найновіші ЗВЕРХУ (від новіших до старіших)
+        if (dateA !== dateB) {
+          return dateB.localeCompare(dateA);
+        }
+        return b.id.localeCompare(a.id);
       }
-      
-      // Залізобетонне сортування за ID Firebase (новіші ID завжди йдуть першими)
-      return b.id.localeCompare(a.id);
     });
   };
 
@@ -97,7 +106,7 @@ export default function Dashboard() {
           price: item.price !== undefined ? item.price : 0,
           image: item.productImage || item.image || '',
           colorImage: item.colorImage || item.color_image || '',
-          createdAt: item.createdAt || '', // Не підставляємо поточну дату для старих!
+          createdAt: item.createdAt || '',
           productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color_text || '—'}, ${item.material || '—'}, ${item.sole || '—'}`
         });
       });

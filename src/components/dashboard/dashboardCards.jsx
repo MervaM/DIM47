@@ -81,37 +81,38 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
             ) : null}
 
             {/* Назва та характеристики */}
-            <div>
+            <div className="text-center">
               <h3 className="text-sm font-bold text-slate-900">{order.productTitle}</h3>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{order.productDetails}</p>
             </div>
 
-            {/* КЛІКАБЕЛЬНИЙ БЛОК ДАНИХ ПОКУПЦЯ (натиснув у будь-яке місце — і все скопіювалося) */}
+            {/* ДАНІ ПОКУПЦЯ (по центру + кнопка копіювання праворуч) */}
             <div 
               onClick={(e) => handleCopyClient(order, e)}
-              className={`pt-2 pb-2 px-3 border rounded-xl transition cursor-pointer relative ${
+              className={`pt-2.5 pb-2.5 px-3 border rounded-xl transition cursor-pointer relative flex items-center justify-between ${
                 isCopied 
                   ? 'bg-emerald-50 border-emerald-300' 
                   : 'bg-slate-50/80 border-slate-200 hover:bg-slate-100/80'
               }`}
               title="Натисніть, щоб скопіювати дані покупця"
             >
-              <div className="flex justify-between items-center">
-                <div className="space-y-0.5">
-                  <div className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                    {order.client || order.clientName}
-                  </div>
-                  <div className="text-xs text-slate-900">{order.phone || order.clientPhone}</div>
-                  <div className="text-xs text-slate-900">
-                    {order.city}{order.warehouse ? `, ${order.warehouse}` : ''}
-                  </div>
-                </div>
+              {/* Порожній блок для симетрії, щоб текст був чітко по центру */}
+              <div className="w-8"></div>
 
-                <div className={`text-xs font-medium px-2 py-1 rounded-lg transition ${
-                  isCopied ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-600 shadow-2xs'
-                }`}>
-                  {isCopied ? '✓ Скопійовано' : '📋 Копіювати'}
+              {/* Текст по центру */}
+              <div className="text-center space-y-0.5">
+                <div className="text-sm font-bold text-slate-900">{order.client || order.clientName}</div>
+                <div className="text-xs text-slate-900">{order.phone || order.clientPhone}</div>
+                <div className="text-xs text-slate-900">
+                  {order.city}{order.warehouse ? `, ${order.warehouse}` : ''}
                 </div>
+              </div>
+
+              {/* Кнопка копіювання праворуч */}
+              <div className={`p-2 rounded-xl text-xs transition ${
+                isCopied ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-600 shadow-2xs'
+              }`}>
+                {isCopied ? '✓' : '📋'}
               </div>
             </div>
 

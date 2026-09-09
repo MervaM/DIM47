@@ -32,6 +32,7 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
         const priceNum = Number(order.price) || 0;
         const advanceNum = Number(order.advance) || 0;
         const remaining = priceNum - advanceNum;
+        const isCopied = copiedId === order.id;
 
         return (
           <div key={order.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5 space-y-2.5">
@@ -79,34 +80,39 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
               </div>
             ) : null}
 
-            {/* Назва та характеристики (чорним жирним шрифтом) */}
+            {/* Назва та характеристики */}
             <div>
               <h3 className="text-sm font-bold text-slate-900">{order.productTitle}</h3>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{order.productDetails}</p>
             </div>
 
-            {/* Дані покупця з кнопкою копіювання */}
-            <div className="pt-1 border-t border-slate-100 relative flex justify-between items-center">
-              <div className="space-y-0.5">
-                <div className="text-sm font-bold text-slate-900">{order.client || order.clientName}</div>
-                <div className="text-xs text-slate-900">{order.phone || order.clientPhone}</div>
-                <div className="text-xs text-slate-900">
-                  {order.city}{order.warehouse ? `, ${order.warehouse}` : ''}
+            {/* КЛІКАБЕЛЬНИЙ БЛОК ДАНИХ ПОКУПЦЯ (натиснув у будь-яке місце — і все скопіювалося) */}
+            <div 
+              onClick={(e) => handleCopyClient(order, e)}
+              className={`pt-2 pb-2 px-3 border rounded-xl transition cursor-pointer relative ${
+                isCopied 
+                  ? 'bg-emerald-50 border-emerald-300' 
+                  : 'bg-slate-50/80 border-slate-200 hover:bg-slate-100/80'
+              }`}
+              title="Натисніть, щоб скопіювати дані покупця"
+            >
+              <div className="flex justify-between items-center">
+                <div className="space-y-0.5">
+                  <div className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                    {order.client || order.clientName}
+                  </div>
+                  <div className="text-xs text-slate-900">{order.phone || order.clientPhone}</div>
+                  <div className="text-xs text-slate-900">
+                    {order.city}{order.warehouse ? `, ${order.warehouse}` : ''}
+                  </div>
+                </div>
+
+                <div className={`text-xs font-medium px-2 py-1 rounded-lg transition ${
+                  isCopied ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-600 shadow-2xs'
+                }`}>
+                  {isCopied ? '✓ Скопійовано' : '📋 Копіювати'}
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={(e) => handleCopyClient(order, e)}
-                className={`p-2 rounded-xl text-xs transition cursor-pointer border ${
-                  copiedId === order.id 
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-                title="Скопіювати дані покупця"
-              >
-                {copiedId === order.id ? '✓' : '📋'}
-              </button>
             </div>
 
             {/* Ціна товару, передплата та залишок до сплати */}

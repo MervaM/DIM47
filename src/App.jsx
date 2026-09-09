@@ -53,6 +53,26 @@ export default function App() {
     localStorage.setItem('dim47_finances', JSON.stringify(finances));
   }, [stock, folders, orders, finances]);
 
+  // Глобальна функція для додавання/редагування товару на складі
+  const handleAddItem = (newItem) => {
+    setStock(prevStock => {
+      const existingIndex = prevStock.findIndex(item => item.id === newItem.id);
+      if (existingIndex >= 0) {
+        // Якщо товар з таким ID вже є — оновлюємо його
+        const updated = [...prevStock];
+        updated[existingIndex] = newItem;
+        return updated;
+      }
+      // Якщо це новий товар — додаємо його у загальний список
+      return [newItem, ...prevStock];
+    });
+  };
+
+  // Глобальна функція для видалення товару зі складу
+  const handleDeleteItem = (itemId) => {
+    setStock(prevStock => prevStock.filter(item => item.id !== itemId));
+  };
+
   const totalIncome = finances.filter(f => f.type === 'Дохід').reduce((acc, curr) => acc + curr.amount, 0);
   const totalExpense = finances.filter(f => f.type === 'Витрата').reduce((acc, curr) => acc + curr.amount, 0);
   const netProfit = totalIncome - totalExpense;
@@ -96,6 +116,8 @@ export default function App() {
             folders={folders}
             currentFolderId={currentFolderId}
             setCurrentFolderId={setCurrentFolderId}
+            onAddItem={handleAddItem}
+            onDeleteItem={handleDeleteItem}
           />
         )}
 

@@ -29,7 +29,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [activeImageType, setActiveImageType] = useState(null);
 
   const fileInputRef = useRef(null);
-  const colorFileInputRef = useRef(null);
+  const colorFileInputRef,
+  const colorInputRef = useRef(null);
 
   let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
   
@@ -45,31 +46,51 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   }
 
-  // Розширений пошук палітри / кольорів з усіх можливих джерел
-  let paletteStock = currentStock.filter(item => 
-    item && (item.folderId === 'palette' || item.folderId === 'colors' || item.isPalette || item.type === 'color' || item.category === 'palette' || item.category === 'colors')
-  );
-
-  if (paletteStock.length === 0) {
-    ['dim47_colors', 'palette', 'colors', 'dim47_palette'].forEach(key => {
-      try {
-        const savedColors = localStorage.getItem(key);
-        if (savedColors) {
-          const parsed = JSON.parse(savedColors);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            paletteStock = parsed;
-          }
+  // Окреме завантаження палітри з ключів кольорів або фільтрація елементів, які не є взуттям
+  let paletteStock = [];
+  ['dim47_colors', 'palette', 'colors', 'dim47_palette'].forEach(key => {
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          paletteStock = [...paletteStock, ...parsed];
         }
-      } catch (e) {}
+      }
+    } catch (e) {}
+  });
+
+  // Якщо в спеціальних сховищах палітри нічого немає, шукаємо у загальному складі те, що має ознаки кольору/матеріалу (не взуття)
+  if (paletteStock.length === 0) {
+    paletteStock = currentStock.filter(item => {
+      if (!item) return false;
+      const folder = (item.folderId || '').toLowerCase();
+      const type = (item.type || '').toLowerCase();
+      const cat = (item.category || '').toLowerCase();
+      const itemName = (item.name || '').toLowerCase();
+      
+      const isColorFolder = folder.includes('color') || folder.includes('palet') || type.includes('color') || cat.includes('color');
+      const isNotShoes = !itemName.includes('чоботи') && !itemName.includes('туфлі') && !itemName.includes('кросівк') && !itemName.includes('мюлі') && !itemName.includes('клоги') && !itemName.includes('оксфорд');
+      
+      return isColorFolder || (isNotShoes && (item.colorImage || item.isColor));
     });
   }
 
-  // Якщо палітра все ще порожня, беремо весь склад, щоб користувач міг вибрати хоч щось
+  // Якщо все одно порожньо, даємо хоча б елементи, де назви схожі на кольори/шкіру
   if (paletteStock.length === 0) {
-    paletteStock = currentStock;
+    paletteStock = currentStock.filter(item => {
+      const n = (item?.name || '').toLowerCase();
+      return n.includes('замш') || n.includes('шкір') || n.includes('чорн') || n.includes('червон') || n.includes('беж') || n.includes('руж') || n.includes('кольор');
+    });
   }
 
-  const shoesStock = currentStock.filter(item => item && (item.folderId === 'shoes' || (!item.folderId && !paletteStock.includes(item))));
+  const shoesStock = currentStock.filter(item => {
+    if (!item) return false;
+    const name = (item.name || '').toLowerCase();
+    const isColorItem = paletteStock.includes(item);
+    return !isColorItem && (item.folderId === 'shoes' || !item.folderId || name.includes('мюлі') || name.includes('туфлі') || name.includes('чоботи') || name.includes('кросівк'));
+  });
+
   const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
 
   const filteredStockProducts = shoesStock.filter(item => 
@@ -80,59 +101,56 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setSmartText(text);
     if (!text.trim()) return;
 
-    // Витягуємо телефон
-    const phoneMatch = text.match(/(\+?38)?0\d{9}/);
+    let cleanText = text;
+
+    // 1. Витягуємо телефон
+    const phoneMatch = cleanText.match(/(\+?38)?0\d{9}/);
     if (phoneMatch) {
       setPhone(phoneMatch[0]);
+      cleanText = cleanText.replace(phoneMatch[0], ' ');
     }
 
-    // Очищаємо текст від телефону для подальшого аналізу
-    let cleanText = text.replace(/(\+?38)?0\d{9}/g, '').trim();
-
-    // Шукаємо місто (наприклад, "м. Нововолинськ", "місто Київ" тощо)
-    const cityMatch = cleanText.match(/(?:м\.|місто)\s*([А-ЯІЄЇҐ][а-яієїґ]+)/i);
-    let extractedCity = '';
-    if (cityMatch) {
-      extractedCity = cityMatch[0];
-      setCity(cityMatch[1]); // запишемо чисту назву або повну
-      cleanText = cleanText.replace(cityMatch[0], '').trim();
-    } else {
-      // Спробуємо знайти слова, схожі на міста/області, якщо явно не вказано "м."
-      const parts = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
-      parts.forEach(part => {
-        if (/Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-|Чернівц|Ужгород|Хмельницьк|Вінниц|Черкас|Полтав|Суми|Запоріжжя|Миколаїв|Кропивницьк|Луцьк|Чернігів/i.test(part)) {
-          extractedCity = part.replace(/місто|м\./gi, '').trim();
-          setCity(extractedCity);
-          cleanText = cleanText.replace(part, '').trim();
-        }
-      });
-    }
-
-    // Шукаємо відділення пошти
-    const addressMatch = cleanText.match(/(?:відділення|нп|пошта|№)[\w\s\d.-]+/i) || cleanText.match(/НП\s*№?\d+/i);
+    // 2. Витягуємо відділення НП (наприклад: "відділення 4", "відділення №4", "НП 4", "№ 4")
+    const addressMatch = cleanText.match(/(?:відділення|нп|пошта|№)\s*[\w№\-]*\s*\d+/i) || cleanText.match(/№\s*\d+/i) || cleanText.match(/відділення\s*№?\s*\d+/i);
     if (addressMatch) {
       setAddress(addressMatch[0].trim());
-      cleanText = cleanText.replace(addressMatch[0], '').trim();
-    }
-
-    // Все, що залишилося на початку (або перші слова) — це ПІБ клієнта
-    cleanText = cleanText.replace(/відділення|НП|область|району|або/gi, '').replace(/\s{2,}/g, ' ').trim();
-    const words = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
-    
-    if (words.length > 0) {
-      // Перший шматок зазвичай ПІБ
-      let potentialName = words.find(w => w.split(' ').length >= 2) || words[0];
-      if (potentialName) {
-        setClientName(potentialName.trim());
-        cleanText = cleanText.replace(potentialName, '').trim();
+      cleanText = cleanText.replace(addressMatch[0], ' ');
+    } else {
+      // Спробуємо знайти просто слова типу "№4" або "поштомат 5"
+      const altAddressMatch = cleanText.match(/(?:поштомат|відділенн[яі])\s*\d+/i);
+      if (altAddressMatch) {
+        setAddress(altAddressMatch[0].trim());
+        cleanText = cleanText.replace(altAddressMatch[0], ' ');
       }
     }
 
-    // Якщо адреса ще не знайдена, але залишились шматки тексту (наприклад, вулиця чи номер)
-    if (!address) {
-      const remainingParts = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
-      if (remainingParts.length > 0) {
-        setAddress(remainingParts.join(', '));
+    // 3. Витягуємо місто (шукаємо "м. Назва" або відомі міста)
+    const cityMatch = cleanText.match(/(?:м\.|місто)\s*([А-ЯІЄЇҐ][а-яієїґ]+(?:[- ][А-ЯІЄЇҐ][а-яієїґ]+)?)/i);
+    if (cityMatch) {
+      setCity(cityMatch[1]);
+      cleanText = cleanText.replace(cityMatch[0], ' ');
+    } else {
+      const ukraineCities = /Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-|Чернівц|Ужгород|Хмельницьк|Вінниц|Черкас|Полтав|Суми|Запоріжжя|Миколаїв|Кропивницьк|Луцьк|Чернігів|Нововолинськ|Ковель|Володимир/i;
+      const cityWordMatch = cleanText.match(ukraineCities);
+      if (cityWordMatch) {
+        setCity(cityWordMatch[0]);
+        cleanText = cleanText.replace(cityWordMatch[0], ' ');
+      }
+    }
+
+    // Очищаємо зайві службові слова та області, щоб не псували ПІБ
+    cleanText = cleanText
+      .replace(/область|обл\.|район|району|або|доставка|отримувач/gi, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    // 4. Все, що залишилося на початку (два-три слова з великої літери) — це ПІБ
+    const words = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
+    if (words.length > 0) {
+      // Шукаємо частину, що містить хоча б 2 слова (Прізвище Ім'я)
+      const possibleName = words.find(w => w.split(/\s+/).length >= 2) || words[0];
+      if (possibleName) {
+        setClientName(possibleName.trim());
       }
     }
   };
@@ -250,8 +268,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                 </div>
               )}
               <div className="flex gap-1.5 w-full justify-center">
-                <input type="file" ref={colorFileInputRef} onChange={(e) => handleFileUpload(e, 'color')} className="hidden" accept="image/*" />
-                <button type="button" title="Завантажити з пристрою" onClick={() => colorFileInputRef.current.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                <input type="file" ref={colorInputRef} onChange={(e) => handleFileUpload(e, 'color')} className="hidden" accept="image/*" />
+                <button type="button" title="Завантажити з пристрою" onClick={() => colorInputRef.current.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
                   <Upload size={16} />
                 </button>
                 <button type="button" title="Вибрати з палітри" onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
@@ -395,7 +413,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                       {img ? (
                         <div onClick={() => handleSelectImageFromStock(item)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
                           <img src={img} alt="" className="w-full h-full object-cover" />
-                          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Елемент'}</div>
+                          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Колір'}</div>
                         </div>
                       ) : (
                         <div onClick={() => handleSelectImageFromStock(item)} className="border border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50 cursor-pointer hover:bg-slate-100">
@@ -407,7 +425,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                 })
               ) : (
                 <div className="col-span-3 py-8 text-center text-xs text-slate-400">
-                  Склад або палітра порожні
+                  {activeImageType === 'color' ? 'Палітра кольорів порожня' : 'Склад порожній'}
                 </div>
               )}
             </div>

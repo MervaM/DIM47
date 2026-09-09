@@ -51,7 +51,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, orderToEdit, st
 
   if (!isOpen) return null;
 
-  // Розумне введення з буфера
   const handleSmartParse = (text) => {
     setSmartText(text);
     if (!text.trim()) return;
@@ -66,23 +65,16 @@ export default function NewOrderModal({ isOpen, onClose, onSave, orderToEdit, st
     }));
   };
 
-  // Вибір моделі зі складу
-  const handleStockSelect = (e) => {
-    const selectedTitle = e.target.value;
-    const foundItem = stockItems.find(item => item.title === selectedTitle);
-    
-    if (foundItem) {
-      setFormData(prev => ({
-        ...prev,
-        productTitle: foundItem.title || '',
-        color: foundItem.color || prev.color,
-        material: foundItem.material || prev.material,
-        image: foundItem.image || prev.image,
-        price: foundItem.price || prev.price
-      }));
-    } else {
-      setFormData(prev => ({ ...prev, productTitle: selectedTitle }));
-    }
+  // Вибір моделі зі складу через картку/кнопку
+  const handleSelectStockItem = (item) => {
+    setFormData(prev => ({
+      ...prev,
+      productTitle: item.title || prev.productTitle,
+      color: item.color || prev.color,
+      material: item.material || prev.material,
+      image: item.image || prev.image,
+      price: item.price || prev.price
+    }));
   };
 
   // Завантаження фото з пристрою
@@ -202,103 +194,109 @@ export default function NewOrderModal({ isOpen, onClose, onSave, orderToEdit, st
 
           <hr className="border-slate-100" />
 
-          {/* Характеристики товару + вибір зі складу / фото */}
+          {/* ВІЗУАЛЬНИЙ БЛОК ВИБОРУ ТОВАРУ (як на скріншоті) */}
           <div className="space-y-3">
-            <h3 className="font-bold text-slate-900 text-sm text-center">Характеристики товару</h3>
+            <h3 className="font-bold text-slate-900 text-sm text-center">Вибір моделі зі складу або завантаження</h3>
             
-            {/* Вибір зі складу */}
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Вибрати модель зі складу</label>
-              <select 
-                onChange={handleStockSelect}
-                defaultValue=""
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 bg-white text-xs cursor-pointer font-medium"
-              >
-                <option value="" disabled>-- Оберіть із каталогу складу --</option>
-                {stockItems.map((item, idx) => (
-                  <option key={idx} value={item.title}>{item.title} ({item.color || 'колір не вказано'})</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Картка обраного або поточного товару */}
+              <div className="border border-slate-200 rounded-2xl p-3 flex flex-col items-center justify-between bg-slate-50/50">
+                <div className="w-20 h-20 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200 mb-2">
+                  {formData.image ? (
+                    <img src={formData.image} alt="Товар" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-slate-400 text-xl">🖼️</span>
+                  )}
+                </div>
+                <div className="flex gap-2 w-full justify-center">
+                  <label className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer shadow-2xs text-xs" title="Завантажити з пристрою">
+                    📤
+                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  </label>
+                  
+                  {/* Швидкий вибір першого товару зі складу для прикладу або кнопка */}
+                  {stockItems.length > 0 && (
+                    <button 
+                      type="button"
+                      onClick={() => handleSelectStockItem(stockItems[0])}
+                      className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer shadow-2xs text-xs"
+                      title="Вибрати зі складу"
+                    >
+                      🔍
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Якщо є кілька товарів у складі, можна вивести міні-список для вибору */}
+              <div className="border border-slate-200 rounded-2xl p-3 flex flex-col justify-center space-y-1.5 bg-slate-50/50 text-[11px]">
+                <span className="font-bold text-slate-700">Швидкий вибір зі складу:</span>
+                <div className="max-h-24 overflow-y-auto space-y-1">
+                  {stockItems.length > 0 ? (
+                    stockItems.map((item, idx) => (
+                      <div 
+                        key={idx} 
+                        onClick={() => handleSelectStockItem(item)}
+                        className="p-1.5 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-amber-50 truncate font-medium"
+                      >
+                        {item.title} ({item.color || '—'})
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-slate-400">Склад порожній</span>
+                  )}
+                </div>
+              </div>
             </div>
 
+            {/* Назва товару */}
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Назва моделі</label>
-              <input 
-                type="text"
-                required
-                value={formData.productTitle}
-                onChange={(e) => setFormData({...formData, productTitle: e.target.value})}
-                placeholder="Напр. Черевики 01"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-sm font-semibold"
-              />
+              <label className="font-bold text-slate-700 block mb-1">Назва товару</label>
+              <div className="relative">
+                <input 
+                  type="text"
+                  required
+                  value={formData.productTitle}
+                  onChange={(e) => setFormData({...formData, productTitle: e.target.value})}
+                  placeholder="Мюлі"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-sm font-semibold pr-10"
+                />
+                <span className="absolute right-3 top-3 text-slate-400">🔍</span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Розмір</label>
+            {/* Характеристики товару в 4 полі (як на скріншоті) */}
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Характеристики товару:</label>
+              <div className="grid grid-cols-2 gap-2">
                 <input 
                   type="text"
                   value={formData.size}
                   onChange={(e) => setFormData({...formData, size: e.target.value})}
-                  placeholder="Напр. 39"
+                  placeholder="39"
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
                 />
-              </div>
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Колір</label>
-                <input 
-                  type="text"
-                  value={formData.color}
-                  onChange={(e) => setFormData({...formData, color: e.target.value})}
-                  placeholder="Напр. жовтий"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Матеріал</label>
                 <input 
                   type="text"
                   value={formData.material}
                   onChange={(e) => setFormData({...formData, material: e.target.value})}
-                  placeholder="Напр. шкіра"
+                  placeholder="шкіра"
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
                 />
-              </div>
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Підошва</label>
                 <input 
                   type="text"
                   value={formData.sole}
                   onChange={(e) => setFormData({...formData, sole: e.target.value})}
-                  placeholder="Напр. трактор"
+                  placeholder="Підошва"
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
                 />
-              </div>
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Наповнення (байка / хутро / демі)</label>
-              <input 
-                type="text"
-                value={formData.lining}
-                onChange={(e) => setFormData({...formData, lining: e.target.value})}
-                placeholder="Напр. байка"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-              />
-            </div>
-
-            {/* Завантаження фото з пристрою */}
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Фото товару</label>
-              <div className="flex items-center gap-2">
-                <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-2 rounded-xl border border-slate-200 transition text-xs">
-                  📁 Завантажити з пристрою
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                </label>
-                {formData.image && <span className="text-emerald-600 font-medium">✓ Фото завантажено</span>}
+                <input 
+                  type="text"
+                  value={formData.color}
+                  onChange={(e) => setFormData({...formData, color: e.target.value})}
+                  placeholder="чорний"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
+                />
               </div>
             </div>
           </div>
@@ -328,18 +326,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, orderToEdit, st
                 className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-sm font-bold"
               />
             </div>
-          </div>
-
-          {/* Нотатка */}
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">Нотатка до замовлення</label>
-            <textarea 
-              rows="2"
-              value={formData.comment}
-              onChange={(e) => setFormData({...formData, comment: e.target.value})}
-              placeholder="Додаткові побажання клієнта..."
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-slate-400 text-xs"
-            />
           </div>
 
           <div className="pt-2 flex gap-2">

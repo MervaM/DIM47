@@ -5,22 +5,23 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
   const [colorImage, setColorImage] = useState('');
+  
   const [size, setSize] = useState('');
   const [material, setMaterial] = useState('');
   const [sole, setSole] = useState('');
   const [color, setColor] = useState('');
-  const [lining, setLining] = useState(''); // Наповнення (байка / хутро)
+  const [lining, setLining] = useState('');
   
   const [clientName, setClientName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
-  const [smartText, setSmartText] = useState(''); // Поле для розумного введення
+  const [smartText, setSmartText] = useState('');
   
   const [paymentType, setPaymentType] = useState('Передплата');
   const [advance, setAdvance] = useState('');
   const [discount, setDiscount] = useState('0');
-  const [comment, setComment] = useState(''); // Поле для коментаря
+  const [comment, setComment] = useState('');
   const [price, setPrice] = useState('');
 
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
@@ -30,7 +31,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const fileInputRef = useRef(null);
   const colorFileInputRef = useRef(null);
 
-  // Збираємо товари з пропса або з localStorage (ключ dim47_stock)
   let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
   
   if (currentStock.length === 0) {
@@ -47,39 +47,36 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   }
 
-  // Фільтруємо товари, залишаючи взуття
+  // Фільтруємо товари залежно від того, що обираємо (взуття чи палітру кольорів)
   const shoesStock = currentStock.filter(item => item && (item.folderId === 'shoes' || !item.folderId));
+  const paletteStock = currentStock.filter(item => item && (item.folderId === 'palette' || item.folderId === 'colors' || item.isPalette));
+
+  // Якщо палітра порожня у сховищі, показуємо суміжні категорії або весь склад, щоб модалка не була порожньою
+  const activeStockList = activeImageType === 'color' 
+    ? (paletteStock.length > 0 ? paletteStock : currentStock) 
+    : shoesStock;
 
   const filteredStockProducts = shoesStock.filter(item => 
     item && item.name && item.name.toLowerCase().includes(name.toLowerCase())
   );
 
-  // Розумне розбирання тексту клієнта
   const handleSmartClientParse = (text) => {
     setSmartText(text);
     if (!text.trim()) return;
 
-    // Шукаємо телефон (формати з +380 або просто 0...)
     const phoneMatch = text.match(/(\+?38)?0\d{9}/);
     if (phoneMatch) {
       setPhone(phoneMatch[0]);
     }
 
-    // Розбиваємо текст за комами або переносів рядків
     const parts = text.split(/,|\n/).map(p => p.trim()).filter(Boolean);
     
-    // Пробуємо витягнути ПІБ, місто, відділення
     parts.forEach(part => {
-      // Якщо містить цифри і схоже на відділення / пошту
       if (/відділенн|пошт|№|\b\d{1,3}\b/i.test(part) && !part.match(/(\+?38)?0\d{9}/)) {
         setAddress(part);
-      } 
-      // Якщо це схоже на телефон - пропускаємо, бо вже знайшли
-      else if (part.match(/(\+?38)?0\d{9}/)) {
+      } else if (part.match(/(\+?38)?0\d{9}/)) {
         // вже оброблено
-      }
-      // Якщо містить букви і довше за 2 символи, вирішуємо чи це ПІБ чи місто
-      else if (!clientName && parts.indexOf(part) === 0) {
+      } else if (!clientName && parts.indexOf(part) === 0) {
         setClientName(part);
       } else if (!city && ( /місто|м\.|м /i.test(part) || parts.indexOf(part) === 1 )) {
         setCity(part.replace(/місто|м\./gi, '').trim());
@@ -88,11 +85,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       }
     });
 
-    // Альтернативний простий розклад через кому, якщо вище не заповнилось
     if (parts.length >= 3) {
       if (!clientName) setClientName(parts[0]);
       if (!phone && phoneMatch) setPhone(phoneMatch[0]);
-      // Знаходимо частину без телефону та не першу
       const remaining = parts.filter(p => !p.includes(phoneMatch?.[0]) && p !== parts[0]);
       if (remaining.length > 0 && !city) setCity(remaining[0]);
       if (remaining.length > 1 && !address) setAddress(remaining[1]);
@@ -103,12 +98,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setName(product.name || '');
     const prodImg = product.image || product.photo || product.img || product.colorImage;
     if (prodImg) setImage(prodImg);
-    if (product.price) setPrice(product.price);
-    if (product.size) setSize(product.size);
-    if (product.material) setMaterial(product.material);
-    if (product.sole) setSole(product.sole);
-    if (product.color) setColor(product.color);
-    if (product.lining) setLining(product.lining);
     setIsProductDropdownOpen(false);
   };
 
@@ -130,12 +119,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (activeImageType === 'product') {
       if (imgUrl) setImage(imgUrl);
       if (product.name) setName(product.name);
-      if (product.price) setPrice(product.price);
-      if (product.size) setSize(product.size);
-      if (product.material) setMaterial(product.material);
-      if (product.sole) setSole(product.sole);
-      if (product.color) setColor(product.color);
-      if (product.lining) setLining(product.lining);
     } else if (activeImageType === 'color') {
       if (imgUrl) setColorImage(imgUrl);
     }
@@ -229,7 +212,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                 <button type="button" title="Завантажити з пристрою" onClick={() => colorFileInputRef.current.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
                   <Upload size={16} />
                 </button>
-                <button type="button" title="Вибрати зі складу" onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                <button type="button" title="Вибрати з палітри" onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
                   <Search size={16} />
                 </button>
               </div>
@@ -249,7 +232,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                   setIsProductDropdownOpen(true);
                 }}
                 onFocus={() => setIsProductDropdownOpen(true)}
-                placeholder="Назва товару (напр. Мюлі)"
+                placeholder="Назва товару"
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
                 required
               />
@@ -273,7 +256,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                       )}
                       <div>
                         <div className="text-xs font-bold text-slate-900">{prod.name}</div>
-                        <div className="text-[11px] text-slate-500">{prod.price ? `${prod.price} грн` : ''} {prod.color ? `• ${prod.color}` : ''}</div>
                       </div>
                     </div>
                   );
@@ -282,38 +264,33 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
-          {/* Характеристики товару (включно з байка / хутро) */}
+          {/* Характеристики товару */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
+              <div className="flex gap-1.5">
+                <button 
+                  type="button" 
+                  onClick={() => setLining('байка')} 
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium cursor-pointer transition ${lining === 'байка' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+                >
+                  Байка
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setLining('хутро')} 
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium cursor-pointer transition ${lining === 'хутро' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+                >
+                  Хутро
+                </button>
+              </div>
+            </div>
+            
             <div className="grid grid-cols-2 gap-2">
-              <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="Розмір (напр. 37)" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-              <input type="text" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Матеріал (напр. шкіра)" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="Розмір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <input type="text" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Матеріал" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
               <input type="text" value={sole} onChange={(e) => setSole(e.target.value)} placeholder="Підошва" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
               <input type="text" value={color} onChange={(e) => setColor(e.target.value)} placeholder="Колір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-            </div>
-            {/* Поле наповнення: байка / хутро */}
-            <div className="flex gap-2 pt-1">
-              <input 
-                type="text" 
-                value={lining} 
-                onChange={(e) => setLining(e.target.value)} 
-                placeholder="Наповнення (байка / хутро)" 
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" 
-              />
-              <button 
-                type="button" 
-                onClick={() => setLining('байка')} 
-                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-medium cursor-pointer"
-              >
-                Байка
-              </button>
-              <button 
-                type="button" 
-                onClick={() => setLining('хутро')} 
-                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-medium cursor-pointer"
-              >
-                Хутро
-              </button>
             </div>
           </div>
 
@@ -327,7 +304,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               rows="2"
               value={smartText}
               onChange={(e) => handleSmartClientParse(e.target.value)}
-              placeholder="Вставте сюди весь текст від клієнта (ПІБ, телефон, місто, відділення)..."
+              placeholder="Вставте сюди весь текст від клієнта..."
               className="w-full px-3 py-2 bg-amber-50/40 border border-amber-200/70 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             />
           </div>
@@ -336,7 +313,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
           <div className="space-y-2">
             <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Ім'я клієнта (ПІБ)" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required />
             <div className="grid grid-cols-2 gap-2">
-              <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Телефон (+380...)" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Телефон" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
               <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Місто" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             </div>
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Відділення / Адреса" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
@@ -361,7 +338,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               rows="2"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Додаткові побажання або примітки..."
+              placeholder="Додаткові побажання..."
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
             />
           </div>
@@ -373,24 +350,26 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         </form>
       </div>
 
-      {/* Модалка вибору фото зі складу */}
+      {/* Модалка вибору фото або палітри */}
       {isStockImagesOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-sm">Виберіть зображення зі складу</h3>
+              <h3 className="font-bold text-slate-900 text-sm">
+                {activeImageType === 'color' ? 'Виберіть колір з палітри' : 'Виберіть зображення зі складу'}
+              </h3>
               <button onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
             <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1 max-h-96">
-              {shoesStock.length > 0 ? (
-                shoesStock.map((item, index) => {
+              {activeStockList.length > 0 ? (
+                activeStockList.map((item, index) => {
                   const img = item.image || item.photo || item.img || item.colorImage;
                   return (
                     <div key={item.id || index}>
                       {img ? (
                         <div onClick={() => handleSelectImageFromStock(item)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
                           <img src={img} alt="" className="w-full h-full object-cover" />
-                          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Товар'}</div>
+                          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Елемент'}</div>
                         </div>
                       ) : (
                         <div onClick={() => handleSelectImageFromStock(item)} className="border border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50 cursor-pointer hover:bg-slate-100">
@@ -402,7 +381,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                 })
               ) : (
                 <div className="col-span-3 py-8 text-center text-xs text-slate-400">
-                  Склад порожній
+                  {activeImageType === 'color' ? 'Папка палітри порожня' : 'Склад порожній'}
                 </div>
               )}
             </div>

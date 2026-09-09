@@ -8,9 +8,7 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc, 
-  doc, 
-  query, 
-  orderBy 
+  doc 
 } from "firebase/firestore";
 
 export default function Dashboard() {
@@ -48,14 +46,16 @@ export default function Dashboard() {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(collection(db, "orders"));
       
-      const loadedOrders = [];
+      const loadedOrdersMap = new Map(); // Використовуємо Map для гарантованого уникнення будь-яких дублів за ID
+      
       querySnapshot.forEach((document) => {
         const item = document.data();
-        loadedOrders.push({
-          id: document.id,
+        const id = document.id;
+
+        loadedOrdersMap.set(id, {
+          id: id,
           date: item.date || new Date().toLocaleDateString('uk-UA'),
           status: item.status || 'Нове',
           client: item.clientName || item.client || '',
@@ -75,8 +75,31 @@ export default function Dashboard() {
           price: item.price !== undefined ? item.price : 0,
           image: item.productImage || item.image || '',
           colorImage: item.colorImage || item.color_image || '',
+          createdAt: item.createdAt || new Date().toISOString(),
           productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color_text || '—'}, ${item.material || '—'}, ${item.sole || '—'}`
         });
+      });
+
+      let loadedOrders = Array.from(loadedOrdersMap.values());
+
+      // Пріоритет статусів: активні зверху, завершені (Доставка, Відмова) знизу
+      const statusPriority = {
+        'Нове': 1,
+        'В роботі': 2,
+        'Доставка': 3,
+        'Відмова': 4
+      };
+
+      loadedOrders.sort((a, b) => {
+        const pA = statusPriority[a.status] || 1;
+        const pB = statusPriority[b.status] || 1;
+        
+        if (pA !== pB) {
+          return pA - pB; 
+        }
+        
+        // Всередині однакового статусу: старіші замовлення мають бути зверху
+        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
       });
 
       setOrders(loadedOrders);
@@ -191,7 +214,19 @@ export default function Dashboard() {
     try {
       const orderRef = doc(db, "orders", id);
       await updateDoc(orderRef, { status: newStatus });
-      setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
+      
+      // Локально оновлюємо та сортуємо на льоту
+      setOrders(prevOrders => {
+        const updated = prevOrders.map(o => o.id === id ? { ...o, status: newStatus } : o);
+        const statusPriority = { 'Нове': 1, 'В роботі': 2, 'Доставка': 3, 'Відмова': 4 };
+        
+        return updated.sort((a, b) => {
+          const pA = statusPriority[a.status] || 1;
+          const pB = statusPriority[b.status] || 1;
+          if (pA !== pB) return pA - pB;
+          return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+        });
+      });
     } catch (error) {
       console.error('Помилка зміни статусу:', error);
     }

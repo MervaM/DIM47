@@ -26,7 +26,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const fileInputRef = useRef(null);
   const colorFileInputRef = useRef(null);
 
-  // Збираємо товари з пропса або безпосередньо з локального сховища за ключем dim47_stock
+  // Збираємо товари з пропса або з localStorage (ключ dim47_stock)
   let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
   
   if (currentStock.length === 0) {
@@ -43,7 +43,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   }
 
-  // Фільтруємо товари, залишаючи взуття (де folderId === 'shoes' або взагалі немає папкової приналежності)
+  // Фільтруємо товари, залишаючи взуття
   const shoesStock = currentStock.filter(item => item && (item.folderId === 'shoes' || !item.folderId));
 
   const filteredStockProducts = shoesStock.filter(item => 
@@ -74,9 +74,21 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   };
 
-  const handleSelectImageFromStock = (imgUrl) => {
-    if (activeImageType === 'product') setImage(imgUrl);
-    else if (activeImageType === 'color') setColorImage(imgUrl);
+  const handleSelectImageFromStock = (product) => {
+    const imgUrl = product.image || product.photo || product.img || product.colorImage;
+    
+    if (activeImageType === 'product') {
+      if (imgUrl) setImage(imgUrl);
+      if (product.name) setName(product.name);
+      if (product.price) setPrice(product.price);
+      if (product.size) setSize(product.size);
+      if (product.material) setMaterial(product.material);
+      if (product.sole) setSole(product.sole);
+      if (product.color) setColor(product.color);
+    } else if (activeImageType === 'color') {
+      if (imgUrl) setColorImage(imgUrl);
+    }
+    
     setIsStockImagesOpen(false);
   };
 
@@ -260,7 +272,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-sm">Виберіть зображення зі складу</h3>
-              <button onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size/></button>
+              <button onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
             <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1 max-h-96">
               {shoesStock.length > 0 ? (
@@ -269,12 +281,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                   return (
                     <div key={item.id || index}>
                       {img ? (
-                        <div onClick={() => handleSelectImageFromStock(img)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
+                        <div onClick={() => handleSelectImageFromStock(item)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
                           <img src={img} alt="" className="w-full h-full object-cover" />
                           <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Товар'}</div>
                         </div>
                       ) : (
-                        <div className="border border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50">
+                        <div onClick={() => handleSelectImageFromStock(item)} className="border border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50 cursor-pointer hover:bg-slate-100">
                           {item.name || 'Без фото'}
                         </div>
                       )}

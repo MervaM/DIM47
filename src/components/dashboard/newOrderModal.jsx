@@ -43,22 +43,18 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     } catch (e) {}
   }
 
-  // Жорсткий відбір палітри: ТІЛЬКИ матеріали/кольори (жодного готового взуття на кшталт мюлі, клогів чи черевиків)
   const isColorOrMaterialItem = (item) => {
     if (!item) return false;
     const n = (item.name || '').toLowerCase();
     const folder = (item.folderId || '').toLowerCase();
     
-    // Якщо це явно папка з кольорами
     if (folder.includes('color') || folder.includes('palet') || folder.includes('шкір') || folder.includes('замш')) return true;
 
-    // Стоп-слова (якщо це назва готового взуття — точно не палітра)
     const isFinishedProduct = n.includes('мюлі') || n.includes('клоги') || n.includes('оксфорд') || 
                               n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
                               n.includes('босоніжк') || n.includes('мокасин');
     if (isFinishedProduct) return false;
 
-    // Критерії кольору/матеріалу
     const hasMaterialKeywords = n.includes('замш') || n.includes('шкір') || n.includes('лак') || 
                                 n.includes('нубук') || n.includes('пітона') || n.includes('рептилі');
     const hasColorKeywords = n.includes('червон') || n.includes('чорн') || n.includes('біл') || 
@@ -72,7 +68,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
   let paletteStock = currentStock.filter(isColorOrMaterialItem);
 
-  // Додаткова перевірка сховищ кольорів у localStorage
   ['dim47_colors', 'palette', 'colors', 'dim47_palette'].forEach(key => {
     try {
       const saved = localStorage.getItem(key);
@@ -85,11 +80,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     } catch (e) {}
   });
 
-  // Захист від дублікатів у палітрі
   paletteStock = Array.from(new Set(paletteStock.map(item => item.id || item.name)))
     .map(id => paletteStock.find(item => (item.id || item.name) === id));
 
-  // Якщо палітра все одно порожня, показуємо порожній масив замість всього складу
   const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
   const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
 
@@ -110,7 +103,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       cleanText = cleanText.replace(phoneMatch[0], ' ');
     }
 
-    // 2. Відділення НП / адреса (шукаємо чітко номери відділень чи поштомати)
+    // 2. Відділення НП / адреса
     const addressMatch = cleanText.match(/(?:відділення|нп|пошта|№)\s*[\w№\-]*\s*\d+/i) || cleanText.match(/№\s*\d+/i) || cleanText.match(/(?:відділення|нп)\s*№?\s*\d+/i);
     if (addressMatch) {
       setAddress(addressMatch[0].trim());
@@ -126,13 +119,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       cleanText = cleanText.replace(cityMatch[0], ' ');
     }
 
-    // Прибираємо зайві регіональні приставки, області та службові слова
+    // Очищаємо сміття та області
     cleanText = cleanText
       .replace(/область|обл\.|район|району|або|доставка|отримувач|Волинська|Львівська|Київська/gi, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
 
-    // 4. ПІБ клієнта (перші слова, що залишились)
+    // 4. ПІБ клієнта
     const words = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
     if (words.length > 0) {
       const possibleName = words.find(w => w.split(/\s+/).length >= 2) || words[0];
@@ -146,6 +139,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setName(product.name || '');
     const prodImg = product.image || product.photo || product.img || product.colorImage;
     if (prodImg) setImage(prodImg);
+    
+    // Автопідтягування ціни та характеристик зі складу
+    if (product.price) setPrice(product.price);
+    if (product.material) setMaterial(product.material);
+    if (product.sole) setSole(product.sole);
+    if (product.color) setColor(product.color);
+    if (product.size) setSize(product.size);
+
     setIsProductDropdownOpen(false);
   };
 
@@ -167,6 +168,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (activeImageType === 'product') {
       if (imgUrl) setImage(imgUrl);
       if (product.name) setName(product.name);
+      if (product.price) setPrice(product.price);
     } else if (activeImageType === 'color') {
       if (imgUrl) setColorImage(imgUrl);
       if (product.name) setColor(product.name);
@@ -292,16 +294,17 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                     <div
                       key={prod.id || index}
                       onClick={() => handleSelectProductFromStock(prod)}
-                      className="flex items-center gap-3 p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none transition"
+                      className="flex items-center justify-between p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none transition"
                     >
-                      {prodImg ? (
-                        <img src={prodImg} alt="" className="w-9 h-9 object-cover rounded-lg border" />
-                      ) : (
-                        <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Фото</div>
-                      )}
-                      <div>
+                      <div className="flex items-center gap-3">
+                        {prodImg ? (
+                          <img src={prodImg} alt="" className="w-9 h-9 object-cover rounded-lg border" />
+                        ) : (
+                          <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Фото</div>
+                        )}
                         <div className="text-xs font-bold text-slate-900">{prod.name}</div>
                       </div>
+                      {prod.price && <div className="text-xs font-semibold text-emerald-600">{prod.price} грн</div>}
                     </div>
                   );
                 })}

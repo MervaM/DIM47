@@ -55,13 +55,18 @@ export default function Dashboard() {
         return compA ? 1 : -1;
       }
 
+      // Базова дата для замовлень без createdAt (щоб найперші завжди були зверху)
+      const dateA = a.createdAt || '2025-01-01T00:00:00.000Z';
+      const dateB = b.createdAt || '2025-01-01T00:00:00.000Z';
+
       if (!compA) {
-        // ДЛЯ АКТИВНИХ («Нове», «В роботі»): ПРЯМИЙ порядок за ID (найстаріші зверху)
+        // ДЛЯ АКТИВНИХ («Нове», «В роботі»): від найстаріших до найновіших (найперше зверху)
+        if (dateA !== dateB) {
+          return dateA.localeCompare(dateB);
+        }
         return a.id.localeCompare(b.id);
       } else {
-        // ДЛЯ ЗАВЕРШЕНИХ («Доставка», «Відмова»): ЗВОРОТНИЙ порядок (найновіші зверху)
-        const dateA = a.createdAt || '';
-        const dateB = b.createdAt || '';
+        // ДЛЯ ЗАВЕРШЕНИХ («Доставка», «Відмова»): від найновіших до найстаріших (щойно доставлені зверху)
         if (dateA !== dateB) {
           return dateB.localeCompare(dateA);
         }

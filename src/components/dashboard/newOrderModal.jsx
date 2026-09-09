@@ -26,26 +26,27 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const fileInputRef = useRef(null);
   const colorFileInputRef = useRef(null);
 
-  // Автоматичне збирання товарів з усіх можливих джерел (пропси + localStorage)
-  let currentStock = Array.isArray(stock) ? [...stock] : [];
+  // Збираємо товари з пропса або безпосередньо з локального сховища за ключем dim47_stock
+  let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
+  
   if (currentStock.length === 0) {
     try {
-      const keysToCheck = ['shoes', 'stock', 'products', 'items', 'warehouse'];
-      keysToCheck.forEach(key => {
-        const data = localStorage.getItem(key);
-        if (data) {
-          const parsed = JSON.parse(data);
-          if (Array.isArray(parsed)) {
-            currentStock = [...currentStock, ...parsed];
-          }
+      const savedStock = localStorage.getItem('dim47_stock');
+      if (savedStock) {
+        const parsed = JSON.parse(savedStock);
+        if (Array.isArray(parsed)) {
+          currentStock = parsed;
         }
-      });
+      }
     } catch (e) {
-      // Ігноруємо помилки парсингу
+      console.error("Помилка читання складу:", e);
     }
   }
 
-  const filteredStockProducts = currentStock.filter(item => 
+  // Фільтруємо товари, залишаючи взуття (де folderId === 'shoes' або взагалі немає папкової приналежності)
+  const shoesStock = currentStock.filter(item => item && (item.folderId === 'shoes' || !item.folderId));
+
+  const filteredStockProducts = shoesStock.filter(item => 
     item && item.name && item.name.toLowerCase().includes(name.toLowerCase())
   );
 
@@ -259,11 +260,11 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-sm">Виберіть зображення зі складу</h3>
-              <button onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
+              <button onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size/></button>
             </div>
             <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1 max-h-96">
-              {currentStock.length > 0 ? (
-                currentStock.map((item, index) => {
+              {shoesStock.length > 0 ? (
+                shoesStock.map((item, index) => {
                   const img = item.image || item.photo || item.img || item.colorImage;
                   return (
                     <div key={item.id || index}>

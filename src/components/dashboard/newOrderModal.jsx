@@ -31,17 +31,14 @@ export default function NewOrderModal({
     setSmartInputText(text);
     if (!text.trim()) return;
 
-    // 1. Шукаємо телефон (формати +380..., 050..., 097... тощо)
     const phoneRegex = /(?:\+38)?0\d{9}/;
     const phoneMatch = text.match(phoneRegex);
     if (phoneMatch) {
       setFormClientPhone(phoneMatch[0]);
     }
 
-    // Видаляємо телефон із тексту, щоб не заважав шукати інше
     let cleanText = text.replace(phoneRegex, '').trim();
 
-    // 2. Шукаємо відділення (наприклад: "відділення 83", "нп 47", "№1", "відд. 5")
     const warehouseRegex = /(?:відділення|відд\.?|нп|поштомат|№)\s*[:\-]?\s*(\d+)/i;
     const whMatch = cleanText.match(warehouseRegex);
     if (whMatch) {
@@ -49,17 +46,13 @@ export default function NewOrderModal({
       cleanText = cleanText.replace(whMatch[0], '').trim();
     }
 
-    // Розбиваємо залишок тексту на шматочки за комами або дефісами
     let parts = cleanText.split(/[,–—-]/).map(p => p.trim()).filter(Boolean);
 
     if (parts.length > 0) {
-      // Зазвичай перша частина — це ПІБ
       setFormClientName(parts[0]);
     }
 
     if (parts.length > 1) {
-      // Друга або наступна частина (якщо це не відділення) може бути містом
-      // Перевіряємо чи не містить вона вже знайдене відділення
       const possibleCity = parts.find(p => !p.toLowerCase().includes('відділ') && !p.toLowerCase().includes('нп') && p !== parts[0]);
       if (possibleCity) {
         setFormCity(possibleCity);
@@ -77,6 +70,7 @@ export default function NewOrderModal({
             {isEditing ? 'Редагувати замовлення' : 'Нове замовлення'}
           </h2>
           <button 
+            type="button"
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 p-1 rounded-full cursor-pointer"
           >
@@ -100,8 +94,8 @@ export default function NewOrderModal({
             />
           </div>
 
-          {/* Основні поля */}
-          <div className="grid grid-cols-1 gap-3">
+          {/* Дані клієнта */}
+          <div className="space-y-3">
             <div>
               <label className="block text-[11px] font-medium text-slate-600 mb-1">Ім'я клієнта (ПІБ)</label>
               <input
@@ -148,6 +142,68 @@ export default function NewOrderModal({
                 className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
               />
             </div>
+          </div>
+
+          {/* ХАРАКТЕРИСТИКИ ВЗУТТЯ */}
+          <div className="border-t pt-3 space-y-3">
+            <p className="text-xs font-bold text-slate-800">Характеристики товару</p>
+            
+            <div>
+              <label className="block text-[11px] font-medium text-slate-600 mb-1">Назва моделі</label>
+              <input
+                type="text"
+                value={formProductTitle}
+                onChange={(e) => setFormProductTitle(e.target.value)}
+                placeholder="Напр. Черевики 01"
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-600 mb-1">Розмір</label>
+                <input
+                  type="text"
+                  value={formSize}
+                  onChange={(e) => setFormSize(e.target.value)}
+                  placeholder="Напр. 39"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-slate-600 mb-1">Колір</label>
+                <input
+                  type="text"
+                  value={formColorText}
+                  onChange={(e) => setFormColorText(e.target.value)}
+                  placeholder="Напр. жовтий"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-600 mb-1">Матеріал</label>
+                <input
+                  type="text"
+                  value={formMaterial}
+                  onChange={(e) => setFormMaterial(e.target.value)}
+                  placeholder="Напр. шкіра"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-slate-600 mb-1">Підошва / Наповнення</label>
+                <input
+                  type="text"
+                  value={formSole}
+                  onChange={(e) => setFormSole(e.target.value)}
+                  placeholder="Напр. трактор / байка"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -171,7 +227,7 @@ export default function NewOrderModal({
             </div>
           </div>
 
-            {/* Кнопки керування */}
+          {/* Кнопки керування */}
           <div className="flex gap-2 pt-3 border-t">
             <button
               type="button"

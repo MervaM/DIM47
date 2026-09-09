@@ -38,20 +38,32 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       const savedStock = localStorage.getItem('dim47_stock');
       if (savedStock) {
         const parsed = JSON.parse(savedStock);
-        if (Array.isArray(parsed)) {
-          currentStock = parsed;
-        }
+        if (Array.isArray(parsed)) currentStock = parsed;
       }
     } catch (e) {
       console.error("Помилка читання складу:", e);
     }
   }
 
-  // Чітке розмежування за папками (folderId)
-  const shoesStock = currentStock.filter(item => item && (item.folderId === 'shoes' || !item.folderId));
-  const paletteStock = currentStock.filter(item => item && (item.folderId === 'palette' || item.folderId === 'colors' || item.isPalette));
+  let paletteStock = currentStock.filter(item => 
+    item && (item.folderId === 'palette' || item.folderId === 'colors' || item.isPalette || item.type === 'color')
+  );
 
-  // Суворий вибір залежно від типу модалки
+  if (paletteStock.length === 0) {
+    ['dim47_colors', 'palette', 'colors'].forEach(key => {
+      try {
+        const savedColors = localStorage.getItem(key);
+        if (savedColors) {
+          const parsed = JSON.parse(savedColors);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            paletteStock = parsed;
+          }
+        }
+      } catch (e) {}
+    });
+  }
+
+  const shoesStock = currentStock.filter(item => item && (item.folderId === 'shoes' || (!item.folderId && !paletteStock.includes(item))));
   const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
 
   const filteredStockProducts = shoesStock.filter(item => 
@@ -63,17 +75,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (!text.trim()) return;
 
     const phoneMatch = text.match(/(\+?38)?0\d{9}/);
-    if (phoneMatch) {
-      setPhone(phoneMatch[0]);
-    }
+    if (phoneMatch) setPhone(phoneMatch[0]);
 
     const parts = text.split(/,|\n/).map(p => p.trim()).filter(Boolean);
     
     parts.forEach(part => {
       if (/відділенн|пошт|№|\b\d{1,3}\b/i.test(part) && !part.match(/(\+?38)?0\d{9}/)) {
         setAddress(part);
-      } else if (part.match(/(\+?38)?0\d{9}/)) {
-        // вже оброблено
       } else if (!clientName && parts.indexOf(part) === 0) {
         setClientName(part);
       } else if (!city && ( /місто|м\.|м /i.test(part) || parts.indexOf(part) === 1 )) {
@@ -119,7 +127,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       if (product.name) setName(product.name);
     } else if (activeImageType === 'color') {
       if (imgUrl) setColorImage(imgUrl);
-      if (product.name && !color) setColor(product.name); // опційно підтягуємо назву кольору, якщо є
+      if (product.name) setColor(product.name);
     }
     
     setIsStockImagesOpen(false);
@@ -168,9 +176,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* Фото товару та зразок кольору */}
           <div className="grid grid-cols-2 gap-3">
-            
             <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2.5">
               <span className="text-xs font-semibold text-slate-700">Фото товару</span>
               {image ? (
@@ -216,10 +222,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                 </button>
               </div>
             </div>
-
           </div>
 
-          {/* Назва товару */}
           <div className="relative space-y-1">
             <label className="text-xs font-semibold text-slate-600">Назва товару</label>
             <div className="relative">
@@ -265,25 +269,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
           {/* Характеристики товару */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
-              <div className="flex gap-1.5">
-                <button 
-                  type="button" 
-                  onClick={() => setLining('байка')} 
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium cursor-pointer transition ${lining === 'байка' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
-                >
-                  Байка
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setLining('хутро')} 
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium cursor-pointer transition ${lining === 'хутро' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
-                >
-                  Хутро
-                </button>
-              </div>
-            </div>
+            <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
             
             <div className="grid grid-cols-2 gap-2">
               <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="Розмір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
@@ -291,9 +277,17 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <input type="text" value={sole} onChange={(e) => setSole(e.target.value)} placeholder="Підошва" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
               <input type="text" value={color} onChange={(e) => setColor(e.target.value)} placeholder="Колір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             </div>
+
+            {/* Байка / Хутро знизу під усіма характеристиками */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-slate-500 font-medium">Вид утеплювача:</span>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={() => setLining('байка')} className={`px-3 py-1 rounded-lg text-[11px] font-medium cursor-pointer transition ${lining === 'байка' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>Байка</button>
+                <button type="button" onClick={() => setLining('хутро')} className={`px-3 py-1 rounded-lg text-[11px] font-medium cursor-pointer transition ${lining === 'хутро' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>Хутро</button>
+              </div>
+            </div>
           </div>
 
-          {/* Розумне введення даних клієнта */}
           <div className="space-y-1 pt-2 border-t border-slate-100">
             <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
               <Wand2 size={14} className="text-amber-600" />
@@ -308,7 +302,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             />
           </div>
 
-          {/* Дані клієнта */}
           <div className="space-y-2">
             <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Ім'я клієнта (ПІБ)" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required />
             <div className="grid grid-cols-2 gap-2">
@@ -318,7 +311,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Відділення / Адреса" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
           </div>
 
-          {/* Ціна та передплата */}
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
             <div>
               <label className="text-[11px] font-semibold text-slate-500">Вартість товару (грн)</label>
@@ -330,7 +322,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             </div>
           </div>
 
-          {/* Поле для коментаря */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-600">Коментар до замовлення</label>
             <textarea
@@ -349,7 +340,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         </form>
       </div>
 
-      {/* Модалка вибору фото або палітри */}
       {isStockImagesOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col">

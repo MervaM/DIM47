@@ -29,7 +29,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [activeImageType, setActiveImageType] = useState(null);
 
   const fileInputRef = useRef(null);
-  const colorFileInputRef,
   const colorInputRef = useRef(null);
 
   let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
@@ -41,56 +40,57 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         const parsed = JSON.parse(savedStock);
         if (Array.isArray(parsed)) currentStock = parsed;
       }
-    } catch (e) {
-      console.error("Помилка читання складу:", e);
-    }
+    } catch (e) {}
   }
 
-  // Окреме завантаження палітри з ключів кольорів або фільтрація елементів, які не є взуттям
-  let paletteStock = [];
+  // Жорсткий відбір палітри: ТІЛЬКИ матеріали/кольори (жодного готового взуття на кшталт мюлі, клогів чи черевиків)
+  const isColorOrMaterialItem = (item) => {
+    if (!item) return false;
+    const n = (item.name || '').toLowerCase();
+    const folder = (item.folderId || '').toLowerCase();
+    
+    // Якщо це явно папка з кольорами
+    if (folder.includes('color') || folder.includes('palet') || folder.includes('шкір') || folder.includes('замш')) return true;
+
+    // Стоп-слова (якщо це назва готового взуття — точно не палітра)
+    const isFinishedProduct = n.includes('мюлі') || n.includes('клоги') || n.includes('оксфорд') || 
+                              n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
+                              n.includes('босоніжк') || n.includes('мокасин');
+    if (isFinishedProduct) return false;
+
+    // Критерії кольору/матеріалу
+    const hasMaterialKeywords = n.includes('замш') || n.includes('шкір') || n.includes('лак') || 
+                                n.includes('нубук') || n.includes('пітона') || n.includes('рептилі');
+    const hasColorKeywords = n.includes('червон') || n.includes('чорн') || n.includes('біл') || 
+                             n.includes('беж') || n.includes('риж') || n.includes('син') || 
+                             n.includes('зелен') || n.includes('жовт') || n.includes('сір') || 
+                             n.includes('рожев') || n.includes('коричневих') || n.includes('оливк') ||
+                             n.includes('пудр') || n.includes('бордо') || n.includes('молок') || n.includes('део');
+
+    return hasMaterialKeywords || hasColorKeywords || item.isColor || item.type === 'color';
+  };
+
+  let paletteStock = currentStock.filter(isColorOrMaterialItem);
+
+  // Додаткова перевірка сховищ кольорів у localStorage
   ['dim47_colors', 'palette', 'colors', 'dim47_palette'].forEach(key => {
     try {
       const saved = localStorage.getItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          paletteStock = [...paletteStock, ...parsed];
+          paletteStock = [...paletteStock, ...parsed.filter(isColorOrMaterialItem)];
         }
       }
     } catch (e) {}
   });
 
-  // Якщо в спеціальних сховищах палітри нічого немає, шукаємо у загальному складі те, що має ознаки кольору/матеріалу (не взуття)
-  if (paletteStock.length === 0) {
-    paletteStock = currentStock.filter(item => {
-      if (!item) return false;
-      const folder = (item.folderId || '').toLowerCase();
-      const type = (item.type || '').toLowerCase();
-      const cat = (item.category || '').toLowerCase();
-      const itemName = (item.name || '').toLowerCase();
-      
-      const isColorFolder = folder.includes('color') || folder.includes('palet') || type.includes('color') || cat.includes('color');
-      const isNotShoes = !itemName.includes('чоботи') && !itemName.includes('туфлі') && !itemName.includes('кросівк') && !itemName.includes('мюлі') && !itemName.includes('клоги') && !itemName.includes('оксфорд');
-      
-      return isColorFolder || (isNotShoes && (item.colorImage || item.isColor));
-    });
-  }
+  // Захист від дублікатів у палітрі
+  paletteStock = Array.from(new Set(paletteStock.map(item => item.id || item.name)))
+    .map(id => paletteStock.find(item => (item.id || item.name) === id));
 
-  // Якщо все одно порожньо, даємо хоча б елементи, де назви схожі на кольори/шкіру
-  if (paletteStock.length === 0) {
-    paletteStock = currentStock.filter(item => {
-      const n = (item?.name || '').toLowerCase();
-      return n.includes('замш') || n.includes('шкір') || n.includes('чорн') || n.includes('червон') || n.includes('беж') || n.includes('руж') || n.includes('кольор');
-    });
-  }
-
-  const shoesStock = currentStock.filter(item => {
-    if (!item) return false;
-    const name = (item.name || '').toLowerCase();
-    const isColorItem = paletteStock.includes(item);
-    return !isColorItem && (item.folderId === 'shoes' || !item.folderId || name.includes('мюлі') || name.includes('туфлі') || name.includes('чоботи') || name.includes('кросівк'));
-  });
-
+  // Якщо палітра все одно порожня, показуємо порожній масив замість всього складу
+  const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
   const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
 
   const filteredStockProducts = shoesStock.filter(item => 
@@ -103,51 +103,38 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
     let cleanText = text;
 
-    // 1. Витягуємо телефон
+    // 1. Телефон
     const phoneMatch = cleanText.match(/(\+?38)?0\d{9}/);
     if (phoneMatch) {
       setPhone(phoneMatch[0]);
       cleanText = cleanText.replace(phoneMatch[0], ' ');
     }
 
-    // 2. Витягуємо відділення НП (наприклад: "відділення 4", "відділення №4", "НП 4", "№ 4")
-    const addressMatch = cleanText.match(/(?:відділення|нп|пошта|№)\s*[\w№\-]*\s*\d+/i) || cleanText.match(/№\s*\d+/i) || cleanText.match(/відділення\s*№?\s*\d+/i);
+    // 2. Відділення НП / адреса (шукаємо чітко номери відділень чи поштомати)
+    const addressMatch = cleanText.match(/(?:відділення|нп|пошта|№)\s*[\w№\-]*\s*\d+/i) || cleanText.match(/№\s*\d+/i) || cleanText.match(/(?:відділення|нп)\s*№?\s*\d+/i);
     if (addressMatch) {
       setAddress(addressMatch[0].trim());
       cleanText = cleanText.replace(addressMatch[0], ' ');
-    } else {
-      // Спробуємо знайти просто слова типу "№4" або "поштомат 5"
-      const altAddressMatch = cleanText.match(/(?:поштомат|відділенн[яі])\s*\d+/i);
-      if (altAddressMatch) {
-        setAddress(altAddressMatch[0].trim());
-        cleanText = cleanText.replace(altAddressMatch[0], ' ');
-      }
     }
 
-    // 3. Витягуємо місто (шукаємо "м. Назва" або відомі міста)
-    const cityMatch = cleanText.match(/(?:м\.|місто)\s*([А-ЯІЄЇҐ][а-яієїґ]+(?:[- ][А-ЯІЄЇҐ][а-яієїґ]+)?)/i);
+    // 3. Місто
+    const ukraineCities = /Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-|Чернівц|Ужгород|Хмельницьк|Вінниц|Черкас|Полтав|Суми|Запоріжжя|Миколаїв|Кропивницьк|Луцьк|Чернігів|Нововолинськ|Ковель|Володимир/i;
+    const cityMatch = cleanText.match(/(?:м\.|місто)\s*([А-ЯІЄЇҐ][а-яієїґ]+(?:[- ][А-ЯІЄЇҐ][а-яієїґ]+)?)/i) || cleanText.match(ukraineCities);
     if (cityMatch) {
-      setCity(cityMatch[1]);
+      const foundCity = cityMatch[1] || cityMatch[0];
+      setCity(foundCity.replace(/місто|м\./gi, '').trim());
       cleanText = cleanText.replace(cityMatch[0], ' ');
-    } else {
-      const ukraineCities = /Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-|Чернівц|Ужгород|Хмельницьк|Вінниц|Черкас|Полтав|Суми|Запоріжжя|Миколаїв|Кропивницьк|Луцьк|Чернігів|Нововолинськ|Ковель|Володимир/i;
-      const cityWordMatch = cleanText.match(ukraineCities);
-      if (cityWordMatch) {
-        setCity(cityWordMatch[0]);
-        cleanText = cleanText.replace(cityWordMatch[0], ' ');
-      }
     }
 
-    // Очищаємо зайві службові слова та області, щоб не псували ПІБ
+    // Прибираємо зайві регіональні приставки, області та службові слова
     cleanText = cleanText
-      .replace(/область|обл\.|район|району|або|доставка|отримувач/gi, ' ')
+      .replace(/область|обл\.|район|району|або|доставка|отримувач|Волинська|Львівська|Київська/gi, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
 
-    // 4. Все, що залишилося на початку (два-три слова з великої літери) — це ПІБ
+    // 4. ПІБ клієнта (перші слова, що залишились)
     const words = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
     if (words.length > 0) {
-      // Шукаємо частину, що містить хоча б 2 слова (Прізвище Ім'я)
       const possibleName = words.find(w => w.split(/\s+/).length >= 2) || words[0];
       if (possibleName) {
         setClientName(possibleName.trim());

@@ -85,8 +85,10 @@ export default function App() {
     try {
       const itemId = String(newItem.id || Date.now());
       await setDoc(doc(db, 'stock', itemId), newItem);
+      console.log("Товар успішно збережено!");
     } catch (error) {
       console.error("Помилка збереження товару:", error);
+      alert("Помилка збереження: " + error.message);
     }
   };
 
@@ -95,6 +97,7 @@ export default function App() {
       await deleteDoc(doc(db, 'stock', String(itemId)));
     } catch (error) {
       console.error("Помилка видалення товару:", error);
+      alert("Помилка видалення: " + error.message);
     }
   };
 

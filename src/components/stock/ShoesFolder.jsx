@@ -10,8 +10,8 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
   const [formSize, setFormSize] = useState('');
   const [formColor, setFormColor] = useState('');
   const [formMaterial, setFormMaterial] = useState('');
-  const [formLining, setFormLining] = useState('байка'); // Поле для наповнення (підкладки)
-  const [formSole, setFormSole] = useState('');
+  const [formLining, setFormLining] = useState(''); // За замовчуванням пусто
+  const [formSole, setFormSole] = useState(''); // За замовчуванням пусто
   const [formPrice, setFormPrice] = useState('');
   const [formSalePrice, setFormSalePrice] = useState('');
   const [formCost, setFormCost] = useState('');
@@ -21,6 +21,9 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSeason, setSelectedSeason] = useState('усі');
 
+  // Перевірка, чи актуальні підошва та підкладка для обраного сезону (Зима / Осінь / Демісезон)
+  const isColdSeason = ['Зима', 'Осінь', 'Демісезон'].includes(formSeason);
+
   const handleOpenAddModal = () => {
     setEditingItem(null);
     setFormName('');
@@ -28,7 +31,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     setFormSize('');
     setFormColor('');
     setFormMaterial('');
-    setFormLining('байка');
+    setFormLining('');
     setFormSole('');
     setFormPrice('');
     setFormSalePrice('');
@@ -45,7 +48,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     setFormSize(item.size || '');
     setFormColor(item.color || '');
     setFormMaterial(item.material || '');
-    setFormLining(item.lining || 'байка');
+    setFormLining(item.lining || '');
     setFormSole(item.sole || '');
     setFormPrice(item.price !== '' ? item.price : '');
     setFormSalePrice(item.salePrice !== '' ? item.salePrice : '');
@@ -73,8 +76,8 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
       size: formSize,
       color: formColor,
       material: formMaterial,
-      lining: formLining,
-      sole: formSole,
+      lining: isColdSeason ? formLining : '',
+      sole: isColdSeason ? formSole : '',
       price: formPrice !== '' ? Number(formPrice) : '',
       salePrice: formSalePrice !== '' ? Number(formSalePrice) : '',
       cost: formCost !== '' ? Number(formCost) : '',
@@ -119,7 +122,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {['усі', 'Демісезон', 'Зима', 'Літо'].map((season) => (
+          {['усі', 'Осінь', 'Зима', 'Демісезон', 'Літо'].map((season) => (
             <button
               key={season}
               type="button"
@@ -179,10 +182,12 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                   <div className="w-14 h-14 bg-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-500 flex-shrink-0">Фото</div>
                 )}
                 <div className="flex-1 flex flex-col text-xs gap-0.5 min-w-0">
+                  {item.season && <span className="text-slate-600">Сезон: <span className="font-medium text-slate-900">{item.season}</span></span>}
                   {item.size && <span className="text-slate-600">Розмір: <span className="font-medium text-slate-900">{item.size}</span></span>}
                   {item.color && <span className="text-slate-600">Колір: <span className="font-medium text-slate-900">{item.color}</span></span>}
                   {item.material && <span className="text-slate-600">Матеріал: <span className="font-medium text-slate-900">{item.material}</span></span>}
                   {item.lining && <span className="text-slate-600">Наповнення: <span className="font-medium text-slate-900">{item.lining}</span></span>}
+                  {item.sole && <span className="text-slate-600">Підошва: <span className="font-medium text-slate-900">{item.sole}</span></span>}
                 </div>
               </div>
             </div>
@@ -209,10 +214,11 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                 <select
                   value={formSeason}
                   onChange={e => setFormSeason(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-xl text-xs bg-white"
+                  className="w-full px-3 py-2 border rounded-xl text-xs bg-white cursor-pointer"
                 >
-                  <option value="Демісезон">Демісезон</option>
+                  <option value="Осінь">Осінь</option>
                   <option value="Зима">Зима</option>
+                  <option value="Демісезон">Демісезон</option>
                   <option value="Літо">Літо</option>
                 </select>
               </div>
@@ -226,29 +232,35 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                   <input type="text" value={formColor} onChange={e => setFormColor(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. чорний" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Матеріал</label>
-                  <input type="text" value={formMaterial} onChange={e => setFormMaterial(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. шкіра" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Наповнення (підкладка)</label>
-                  <select
-                    value={formLining}
-                    onChange={e => setFormLining(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-xl text-xs bg-white"
-                  >
-                    <option value="байка">Байка</option>
-                    <option value="хутро">Хутро</option>
-                    <option value="шкірпідклад">Шкірпідклад</option>
-                    <option value="без підкладки">Без підкладки</option>
-                  </select>
-                </div>
-              </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Підошва</label>
-                <input type="text" value={formSole} onChange={e => setFormSole(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. трактор" />
+                <label className="block text-xs font-medium text-slate-500 mb-1">Матеріал</label>
+                <input type="text" value={formMaterial} onChange={e => setFormMaterial(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. шкіра" />
               </div>
+
+              {/* Опціональні поля для Осені, Зими та Демісезону */}
+              {isColdSeason && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Наповнення (підкладка)</label>
+                    <select
+                      value={formLining}
+                      onChange={e => setFormLining(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-xl text-xs bg-white cursor-pointer"
+                    >
+                      <option value="">Без підкладки (за замовчуванням)</option>
+                      <option value="байка">Байка</option>
+                      <option value="хутро">Хутро</option>
+                      <option value="шерсть">Шерсть</option>
+                      <option value="шкірпідклад">Шкірпідклад</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Підошва</label>
+                    <input type="text" value={formSole} onChange={e => setFormSole(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs bg-white" placeholder="Напр. трактор" />
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Ціна продажу (грн)</label>

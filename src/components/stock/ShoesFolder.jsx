@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit3, X, Search } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../firebaseConfig'; // Перевірте шлях: якщо файл у тій самій папці, змініть на './firebaseConfig'
+import { db } from '../../js/firebase'; // Виправлено шлях до твого firebase відповідно до App.jsx
 
 export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDetails }) {
   const [showModal, setShowModal] = useState(false);
@@ -134,7 +134,8 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     }
   };
 
-  const shoesList = stock.filter(item => item.folderId === 'shoes');
+  // Виправлено фільтрацію: тепер показує елементи, де folderId це 'shoes' або якщо поле взагалі не задане (щоб старі записи теж з'явилися)
+  const shoesList = stock.filter(item => item.folderId === 'shoes' || !item.folderId);
 
   const filteredShoes = shoesList.filter(item => {
     const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||

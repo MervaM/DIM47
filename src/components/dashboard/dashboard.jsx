@@ -15,7 +15,7 @@ export default function Dashboard() {
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [orders, setOrders] = useState([]);
-  const [stockProducts, setStockProducts] = useState([]); // Додано стейт для товарів зі складу (з хмари)
+  const [stockProducts, setStockProducts] = useState([]);
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
 
@@ -23,16 +23,21 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchOrders();
-    fetchStockProducts(); // Завантажуємо склад із хмари при монтуванні
+    fetchStockProducts();
   }, []);
 
-  // Функція для завантаження товарів/складу з Firebase
+  // Функція для завантаження складу з колекції "stock" у Firebase
   const fetchStockProducts = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, "products")); // або "stock", залежно як названа колекція у вас в Firestore
+      const querySnapshot = await getDocs(collection(db, "stock"));
       const items = [];
       querySnapshot.forEach((docSnap) => {
-        items.push({ id: docSnap.id, ...docSnap.data() });
+        const data = docSnap.data();
+        items.push({ 
+          id: docSnap.id, 
+          ...data,
+          price: data.price !== undefined ? data.price : data.cost // Підтягуємо ціну з поля cost, якщо price немає
+        });
       });
       setStockProducts(items);
     } catch (error) {

@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit3, X, Search } from 'lucide-react';
+// Якщо у вас налаштований Firebase, імпортуйте db та функції (змініть шлях під ваш проєкт, наприклад './firebase' або '../firebase')
+// import { db } from '../firebase'; 
+// import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDetails }) {
   const [showModal, setShowModal] = useState(false);
@@ -17,7 +20,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
   const [formCost, setFormCost] = useState('');
   const [formImage, setFormImage] = useState('');
 
-  // Пошук та фільтри
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSeason, setSelectedSeason] = useState('усі');
 
@@ -56,7 +58,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     setShowModal(true);
   };
 
-  // Автоматичне стиснення зображення перед збереженням у стейт
+  // Стиснення зображення
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -66,8 +68,8 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
         img.src = event.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 500;
-          const MAX_HEIGHT = 500;
+          const MAX_WIDTH = 400; // Зменшено для надійності ліміту Firebase (до 400px)
+          const MAX_HEIGHT = 400;
           let width = img.width;
           let height = img.height;
 
@@ -88,8 +90,8 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Стискаємо у формат JPEG з якістю 0.7, щоб зменшити розмір для Firebase
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          // Якість 0.65 для мінімального обсягу
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.65);
           setFormImage(compressedDataUrl);
         };
       };
@@ -97,14 +99,16 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim()) {
       alert("Введіть назву моделі!");
       return;
     }
 
+    const itemId = editingItem ? String(editingItem.id) : String(Date.now());
+
     const newItem = {
-      id: editingItem ? String(editingItem.id) : String(Date.now()),
+      id: itemId,
       folderId: 'shoes',
       name: formName,
       season: formSeason,
@@ -120,11 +124,19 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
       status: 'зразок'
     };
 
-    onAddItem(newItem);
-    setShowModal(false);
+    try {
+      // Якщо у вас підключений Firestore напряму тут, можна розкоментувати:
+      // await setDoc(doc(db, "stock", itemId), newItem);
+      
+      // Передаємо наверх у батьківський компонент
+      onAddItem(newItem);
+      setShowModal(false);
+    } catch (error) {
+      console.error("Помилка збереження у базу:", error);
+      alert("Помилка збереження! Можливо, картинка все ще занадто велика.");
+    }
   };
 
-  // Фільтр для папки взуття
   const shoesList = stock.filter(item => {
     if (item.folderId === 'shoes') return true;
     if (!item.folderId) {
@@ -332,6 +344,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Фото моделі</label>
                 <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs" />
+                {formImage && <p className="text-[10px] text-emerald-600 mt-1">✓ Зображення успішно завантажено та стиснуто</p>}
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t">

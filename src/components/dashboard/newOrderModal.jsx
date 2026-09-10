@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Search, Image as ImageIcon, Wand2, Receipt } from 'lucide-react';
+import { X, Upload, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
 
 export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [name, setName] = useState('');
@@ -24,10 +24,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [comment, setComment] = useState('');
   const [price, setPrice] = useState('');
 
-  // Нові поля для ПРРО / фіскалізації
-  const [isFiscal, setIsFiscal] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState('Картка (ПромПей / LiqPay / По реквізитах)');
-
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
   const [isStockImagesOpen, setIsStockImagesOpen] = useState(false);
   const [activeImageType, setActiveImageType] = useState(null);
@@ -39,7 +35,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   useEffect(() => {
     if (isOpen) {
       setAdvance('300');
-      setIsFiscal(true);
     }
   }, [isOpen]);
 
@@ -63,8 +58,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (folder.includes('color') || folder.includes('palet') || folder.includes('шкір') || folder.includes('замш')) return true;
 
     const isFinishedProduct = n.includes('мюлі') || n.includes('клоги') || n.includes('оксфорд') || 
-                            n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
-                            n.includes('босоніжк') || n.includes('мокасин');
+                              n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
+                              n.includes('босоніжк') || n.includes('мокасин');
     if (isFinishedProduct) return false;
 
     const hasMaterialKeywords = n.includes('замш') || n.includes('шкір') || n.includes('лак') || 
@@ -235,9 +230,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       comment,
       price: Number(price) || 0,
       status: 'нове',
-      // Додано параметри фіскалізації ПРРО
-      isFiscal,
-      paymentMethod,
       createdAt: new Date().toISOString()
     };
 
@@ -252,8 +244,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 relative my-8 space-y-5">
+    <div 
+      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto cursor-pointer"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 relative my-8 space-y-5 cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <h2 className="text-xl font-bold text-slate-900">Нове замовлення</h2>
@@ -419,36 +417,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             </div>
           </div>
 
-          {/* Блок налаштування ПРРО / Фіскалізації */}
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 cursor-pointer">
-                <Receipt size={14} className="text-emerald-600" />
-                Фіскалізувати продаж (Checkbox / NovaPay)
-              </label>
-              <input 
-                type="checkbox" 
-                checked={isFiscal} 
-                onChange={(e) => setIsFiscal(e.target.checked)}
-                className="w-4 h-4 accent-slate-900 rounded cursor-pointer"
-              />
-            </div>
-            {isFiscal && (
-              <div>
-                <label className="text-[10px] font-medium text-slate-500">Форма оплати для чека:</label>
-                <select 
-                  value={paymentMethod} 
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                >
-                  <option value="Картка (ПромПей / LiqPay / По реквізитах)">Картка (ПромПей / LiqPay / По реквізитах)</option>
-                  <option value="Готівка">Готівка</option>
-                  <option value="Післяплата (NovaPay)">Післяплата (NovaPay)</option>
-                </select>
-              </div>
-            )}
-          </div>
-
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-600">Коментар до замовлення</label>
             <textarea
@@ -468,8 +436,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       </div>
 
       {isStockImagesOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col">
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4 cursor-pointer"
+          onClick={() => setIsStockImagesOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-sm">
                 {activeImageType === 'color' ? 'Виберіть колір з палітри' : 'Виберіть зображення зі складу'}

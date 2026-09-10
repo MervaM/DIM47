@@ -10,8 +10,8 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
   const [formSize, setFormSize] = useState('');
   const [formColor, setFormColor] = useState('');
   const [formMaterial, setFormMaterial] = useState('');
-  const [formLining, setFormLining] = useState(''); // За замовчуванням пусто
-  const [formSole, setFormSole] = useState(''); // За замовчуванням пусто
+  const [formLining, setFormLining] = useState(''); // Пусто за замовчуванням
+  const [formSole, setFormSole] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formSalePrice, setFormSalePrice] = useState('');
   const [formCost, setFormCost] = useState('');
@@ -21,7 +21,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSeason, setSelectedSeason] = useState('усі');
 
-  // Перевірка, чи актуальні підошва та підкладка для обраного сезону (Зима / Осінь / Демісезон)
   const isColdSeason = ['Зима', 'Осінь', 'Демісезон'].includes(formSeason);
 
   const handleOpenAddModal = () => {
@@ -89,7 +88,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
 
   const shoesList = stock.filter(item => item.folderId === 'shoes');
 
-  // Фільтрація взуття
   const filteredShoes = shoesList.filter(item => {
     const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           item.color?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -99,7 +97,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
 
   return (
     <div className="space-y-4">
-      {/* Кнопка додавання на всю ширину */}
       <button 
         type="button"
         onClick={handleOpenAddModal}
@@ -108,7 +105,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
         <Plus size={16} /> Додати взуття
       </button>
 
-      {/* Пошук та фільтри сезонів */}
       <div className="space-y-2">
         <div className="relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -149,7 +145,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
               onClick={() => onSelectDetails(item)}
               className="p-3.5 bg-slate-50 hover:bg-slate-100 cursor-pointer rounded-xl border border-slate-200 flex flex-col gap-2.5 transition relative"
             >
-              {/* Верхній рядок: Назва + Кнопки редагування/видалення у правому куті */}
               <div className="flex items-center justify-between gap-2">
                 <strong className="text-slate-900 text-sm whitespace-nowrap overflow-hidden text-ellipsis">
                   {item.name}
@@ -174,7 +169,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                 </div>
               </div>
 
-              {/* Основний блок з фото та характеристиками */}
               <div className="flex gap-3 items-center">
                 {item.image ? (
                   <img src={item.image} alt="" className="w-14 h-14 object-cover rounded-lg border flex-shrink-0" />
@@ -237,22 +231,27 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                 <input type="text" value={formMaterial} onChange={e => setFormMaterial(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. шкіра" />
               </div>
 
-              {/* Опціональні поля для Осені, Зими та Демісезону */}
+              {/* Опціональний блок для холодних сезонів з кнопками Байка / Хутро */}
               {isColdSeason && (
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Наповнення (підкладка)</label>
-                    <select
-                      value={formLining}
-                      onChange={e => setFormLining(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-xl text-xs bg-white cursor-pointer"
-                    >
-                      <option value="">Без підкладки (за замовчуванням)</option>
-                      <option value="байка">Байка</option>
-                      <option value="хутро">Хутро</option>
-                      <option value="шерсть">Шерсть</option>
-                      <option value="шкірпідклад">Шкірпідклад</option>
-                    </select>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Вид утеплювача</label>
+                    <div className="flex gap-2">
+                      {['Байка', 'Хутро'].map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setFormLining(formLining === type ? '' : type)}
+                          className={`px-4 py-1.5 rounded-xl text-xs font-medium border transition cursor-pointer ${
+                            formLining === type 
+                              ? 'bg-slate-900 text-white border-slate-900' 
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">Підошва</label>

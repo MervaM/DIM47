@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit3, X, Search } from 'lucide-react';
-// Якщо у вас налаштований Firebase, імпортуйте db та функції (змініть шлях під ваш проєкт, наприклад './firebase' або '../firebase')
-// import { db } from '../firebase'; 
-// import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDetails }) {
   const [showModal, setShowModal] = useState(false);
@@ -58,7 +55,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     setShowModal(true);
   };
 
-  // Стиснення зображення
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -68,7 +64,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
         img.src = event.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 400; // Зменшено для надійності ліміту Firebase (до 400px)
+          const MAX_WIDTH = 400;
           const MAX_HEIGHT = 400;
           let width = img.width;
           let height = img.height;
@@ -90,7 +86,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Якість 0.65 для мінімального обсягу
           const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.65);
           setFormImage(compressedDataUrl);
         };
@@ -99,7 +94,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!formName.trim()) {
       alert("Введіть назву моделі!");
       return;
@@ -124,29 +119,11 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
       status: 'зразок'
     };
 
-    try {
-      // Якщо у вас підключений Firestore напряму тут, можна розкоментувати:
-      // await setDoc(doc(db, "stock", itemId), newItem);
-      
-      // Передаємо наверх у батьківський компонент
-      onAddItem(newItem);
-      setShowModal(false);
-    } catch (error) {
-      console.error("Помилка збереження у базу:", error);
-      alert("Помилка збереження! Можливо, картинка все ще занадто велика.");
-    }
+    onAddItem(newItem);
+    setShowModal(false);
   };
 
-  const shoesList = stock.filter(item => {
-    if (item.folderId === 'shoes') return true;
-    if (!item.folderId) {
-      const nameLower = (item.name || '').toLowerCase();
-      if (!nameLower.includes('коробк') && !nameLower.includes('пильовик')) {
-        return true;
-      }
-    }
-    return false;
-  });
+  const shoesList = stock.filter(item => item.folderId === 'shoes');
 
   const filteredShoes = shoesList.filter(item => {
     const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -240,7 +217,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                   {item.size && <span className="text-slate-600">Розмір: <span className="font-medium text-slate-900">{item.size}</span></span>}
                   {item.color && <span className="text-slate-600">Колір: <span className="font-medium text-slate-900">{item.color}</span></span>}
                   {item.material && <span className="text-slate-600">Матеріал: <span className="font-medium text-slate-900">{item.material}</span></span>}
-                  {item.lining && <span className="text-slate-600">Наповнення: <span className="font-medium text-slate-900">{item.lining}</span></span>}
+                  {item.lining && <span className="text-slate-600">Утеплювач: <span className="font-medium text-slate-900">{item.lining}</span></span>}
                   {item.sole && <span className="text-slate-600">Підошва: <span className="font-medium text-slate-900">{item.sole}</span></span>}
                 </div>
               </div>

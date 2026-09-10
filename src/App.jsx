@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { db } from './js/firebase';
 import Header from './components/header/header';
 import Dashboard from './components/dashboard/dashboard';
@@ -33,7 +33,31 @@ export default function App() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [finReportPeriod, setFinReportPeriod] = useState('month');
 
-  // Підписка на оновлення з Firebase в реальному часі для складу і замовлень
+  // Міграція зі старого localStorage у Firebase (робиться один раз, якщо в базі пусто)
+  useEffect(() => {
+    const migrateLocalData = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'stock'));
+        if (querySnapshot.empty) {
+          const savedStock = localStorage.getItem('dim47_stock');
+          if (savedStock) {
+            const parsedStock = JSON.parse(savedStock);
+            for (const item of parsedStock) {
+              const itemId = String(item.id || Date.now());
+              await setDoc(doc(db, 'stock', itemId), item);
+            }
+            console.log("Старий склад успішно перенесено у Firebase!");
+          }
+        }
+      } catch (error) {
+        console.error("Помилка міграції:", error);
+      }
+    };
+
+    migrateLocalData();
+  }, []);
+
+  // Підписка на оновлення з Firebase в реальному часі
   useEffect(() => {
     const unsubscribeStock = onSnapshot(collection(db, 'stock'), (snapshot) => {
       const items = snapshot.docs.map(docSnapshot => ({
@@ -57,17 +81,15 @@ export default function App() {
     };
   }, []);
 
-  // Додавання або оновлення товару на складі у Firebase
   const handleAddItem = async (newItem) => {
     try {
-      const itemId = String(newItem.id);
+      const itemId = String(newItem.id || Date.now());
       await setDoc(doc(db, 'stock', itemId), newItem);
     } catch (error) {
       console.error("Помилка збереження товару:", error);
     }
   };
 
-  // Видалення товару зі складу у Firebase
   const handleDeleteItem = async (itemId) => {
     try {
       await deleteDoc(doc(db, 'stock', String(itemId)));

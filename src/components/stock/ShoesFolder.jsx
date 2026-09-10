@@ -10,7 +10,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
   const [formSize, setFormSize] = useState('');
   const [formColor, setFormColor] = useState('');
   const [formMaterial, setFormMaterial] = useState('');
-  const [formLining, setFormLining] = useState(''); // Пусто за замовчуванням
+  const [formLining, setFormLining] = useState('');
   const [formSole, setFormSole] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formSalePrice, setFormSalePrice] = useState('');
@@ -86,7 +86,17 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     setShowModal(false);
   };
 
-  const shoesList = stock.filter(item => item.folderId === 'shoes');
+  // Оновлений фільтр для папки взуття
+  const shoesList = stock.filter(item => {
+    if (item.folderId === 'shoes') return true;
+    if (!item.folderId) {
+      const nameLower = (item.name || '').toLowerCase();
+      if (!nameLower.includes('коробк') && !nameLower.includes('пильовик')) {
+        return true;
+      }
+    }
+    return false;
+  });
 
   const filteredShoes = shoesList.filter(item => {
     const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -231,7 +241,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                 <input type="text" value={formMaterial} onChange={e => setFormMaterial(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. шкіра" />
               </div>
 
-              {/* Опціональний блок для холодних сезонів з кнопками Байка / Хутро */}
               {isColdSeason && (
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
                   <div>

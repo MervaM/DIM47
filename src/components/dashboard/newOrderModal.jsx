@@ -37,7 +37,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   }, [isOpen]);
 
-  // Збираємо дані зі складу з усіх можливих ключів localStorage та пропсів
+  // Безпечна функція закриття (викликає пропс і підстраховує)
+  const handleClose = () => {
+    if (typeof onClose === 'function') {
+      onClose();
+    }
+  };
+
   let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
   
   if (currentStock.length === 0) {
@@ -64,7 +70,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (folder.includes('color') || folder.includes('palet') || folder.includes('шкір') || folder.includes('замш')) return true;
     if (item.isColor || item.type === 'color') return true;
 
-    // Якщо це явно готовий виріб (взуття), це точно не палітра кольорів
     const isFinishedProduct = n.includes('мюлі') || n.includes('клоги') || n.includes('оксфорд') || 
                               n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
                               n.includes('босоніжк') || n.includes('мокасин');
@@ -91,7 +96,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     .map(id => paletteStock.find(item => (item?.id || item?.name) === id))
     .filter(Boolean);
 
-  // Решта товарів вважається взуттям/товарами зі складу
   const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
   const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
 
@@ -236,23 +240,30 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (typeof onSave === 'function') {
       onSave(newOrder);
     }
-    onClose();
+    handleClose();
   };
 
   if (!isOpen) return null;
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto cursor-pointer"
-      onClick={onClose}
+      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto"
+      onClick={handleClose}
     >
       <div 
-        className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 relative my-auto space-y-4 cursor-default max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 relative my-auto space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <h2 className="text-xl font-bold text-slate-900">Нове замовлення</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClose();
+            }} 
+            className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"
+          >
             <X size={20} />
           </button>
         </div>
@@ -417,7 +428,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">Скасувати</button>
+            <button type="button" onClick={handleClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">Скасувати</button>
             <button type="submit" className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer">Зберегти</button>
           </div>
         </form>
@@ -425,18 +436,18 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
       {isStockImagesOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4 cursor-pointer"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4"
           onClick={() => setIsStockImagesOpen(false)}
         >
           <div 
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col cursor-default"
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-150">
               <h3 className="font-bold text-slate-900 text-sm">
                 {activeImageType === 'color' ? 'Виберіть колір з палітри' : 'Виберіть зображення зі складу'}
               </h3>
-              <button onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
+              <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
             <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1 max-h-96">
               {activeStockList.length > 0 ? (

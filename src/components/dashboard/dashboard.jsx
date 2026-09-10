@@ -15,18 +15,32 @@ export default function Dashboard() {
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [stockProducts, setStockProducts] = useState([]); // Додано стейт для товарів зі складу (з хмари)
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
 
-  // Додано статус 'Успішно'
   const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Успішно', 'Відмова'];
 
   useEffect(() => {
     fetchOrders();
+    fetchStockProducts(); // Завантажуємо склад із хмари при монтуванні
   }, []);
 
+  // Функція для завантаження товарів/складу з Firebase
+  const fetchStockProducts = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "products")); // або "stock", залежно як названа колекція у вас в Firestore
+      const items = [];
+      querySnapshot.forEach((docSnap) => {
+        items.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setStockProducts(items);
+    } catch (error) {
+      console.error('Помилка завантаження складу з хмари:', error);
+    }
+  };
+
   const sortOrdersList = (ordersArray) => {
-    // Додано 'Успішно' до списку завершених статусів, щоб вони опускалися в кінець списку
     const isCompleted = (status) => status === 'Доставка' || status === 'Успішно' || status === 'Відмова';
 
     return [...ordersArray].sort((a, b) => {
@@ -238,8 +252,9 @@ export default function Dashboard() {
 
       <NewOrderModal 
         isOpen={showNewOrderModal}
-        onClose={() => setShowNewOrderModal5 => setShowNewOrderModal(false)}
+        onClose={() => setShowNewOrderModal(false)}
         onSave={handleSaveOrder}
+        stock={stockProducts}
       />
     </div>
   );

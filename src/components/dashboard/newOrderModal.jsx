@@ -19,7 +19,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [smartText, setSmartText] = useState('');
   
   const [paymentType, setPaymentType] = useState('Передплата');
-  const [advance, setAdvance] = useState('300'); // Автоматично 300 за замовчуванням
+  const [advance, setAdvance] = useState('300');
   const [discount, setDiscount] = useState('0');
   const [comment, setComment] = useState('');
   const [price, setPrice] = useState('');
@@ -31,7 +31,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const fileInputRef = useRef(null);
   const colorInputRef = useRef(null);
 
-  // Скидання / ініціалізація дефолтної передплати при відкритті
   useEffect(() => {
     if (isOpen) {
       setAdvance('300');
@@ -142,7 +141,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const handlePriceChange = (e) => {
     const newPrice = e.target.value;
     setPrice(newPrice);
-
     const numPrice = Number(newPrice) || 0;
     
     setAdvance(prev => {
@@ -235,8 +233,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
     if (typeof onSave === 'function') {
       onSave(newOrder);
-    } else {
-      console.warn('onSave пропс не передано у компонент NewOrderModal!', newOrder);
     }
     onClose();
   };
@@ -245,11 +241,11 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto cursor-pointer"
+      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto cursor-pointer"
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 relative my-8 space-y-5 cursor-default"
+        className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 relative my-auto space-y-4 cursor-default max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -365,11 +361,10 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <input type="text" value={color} onChange={(e) => setColor(e.target.value)} placeholder="Колір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-slate-500 font-medium">Вид утеплювача:</span>
+            <div className="flex items-center justify-end pt-1">
               <div className="flex gap-1.5">
-                <button type="button" onClick={() => setLining('байка')} className={`px-3 py-1 rounded-lg text-[11px] font-medium cursor-pointer transition ${lining === 'байка' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>Байка</button>
-                <button type="button" onClick={() => setLining('хутро')} className={`px-3 py-1 rounded-lg text-[11px] font-medium cursor-pointer transition ${lining === 'хутро' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>Хутро</button>
+                <button type="button" onClick={() => setLining('байка')} className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition ${lining === 'байка' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>Байка</button>
+                <button type="button" onClick={() => setLining('хутро')} className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition ${lining === 'хутро' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>Хутро</button>
               </div>
             </div>
           </div>

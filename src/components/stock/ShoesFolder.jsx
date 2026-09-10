@@ -96,6 +96,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     }
   };
 
+  // Пряме збереження у Firestore з гарантією створення колекції stock
   const handleSave = async () => {
     if (!formName.trim()) {
       alert("Введіть назву моделі!");
@@ -122,16 +123,16 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     };
 
     try {
-      // Суворо зберігаємо у колекцію 'stock'
-      const docRef = doc(db, 'stock', itemId);
-      await setDoc(docRef, newItem, { merge: true });
-      console.log("Успішно збережено у колекцію 'stock' під ID:", itemId);
+      // Записуємо напряму у базу даних Firebase у колекцію 'stock'
+      await setDoc(doc(db, 'stock', itemId), newItem);
+      console.log("Успішно записано у Firebase Firestore у колекцію stock під ID:", itemId);
 
+      // Також оновлюємо стан в інтерфейсі
       onAddItem(newItem);
       setShowModal(false);
     } catch (error) {
-      console.error("Помилка збереження у Firebase:", error);
-      alert("Помилка збереження: " + error.message);
+      console.error("Помилка запису у Firebase:", error);
+      alert("Помилка збереження в базу даних: " + error.message);
     }
   };
 

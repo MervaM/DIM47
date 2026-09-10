@@ -104,7 +104,6 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
 
     const itemId = editingItem ? String(editingItem.id) : String(Date.now());
 
-    // Завжди жорстко прописуємо folderId: 'shoes', щоб унеможливити втрату при фільтрації
     const newItem = {
       id: itemId,
       folderId: 'shoes',
@@ -123,19 +122,19 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     };
 
     try {
+      // Суворо зберігаємо у колекцію 'stock'
       const docRef = doc(db, 'stock', itemId);
       await setDoc(docRef, newItem, { merge: true });
-      console.log("Успішно збережено у Firebase Firestore під ID:", itemId);
+      console.log("Успішно збережено у колекцію 'stock' під ID:", itemId);
 
       onAddItem(newItem);
       setShowModal(false);
     } catch (error) {
       console.error("Помилка збереження у Firebase:", error);
-      alert("Помилка збереження в базу даних. Перевірте консоль.");
+      alert("Помилка збереження: " + error.message);
     }
   };
 
-  // Показуємо всі записи, які належать до взуття або не мають мітки (щоб старі дані теж витягнулись)
   const shoesList = stock.filter(item => item.folderId === 'shoes' || !item.folderId || item.folderId === 'Взуття');
 
   const filteredShoes = shoesList.filter(item => {

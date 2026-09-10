@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
 
-export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
+export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], orderToEdit = null }) {
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
   const [colorImage, setColorImage] = useState('');
@@ -31,21 +31,55 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const fileInputRef = useRef(null);
   const colorInputRef = useRef(null);
 
+  // Автоматично заповнюємо або очищуємо форму при відкритті
   useEffect(() => {
     if (isOpen) {
-      setAdvance('300');
+      if (orderToEdit) {
+        setName(orderToEdit.name || '');
+        setImage(orderToEdit.image || '');
+        setColorImage(orderToEdit.colorImage || '');
+        setSize(orderToEdit.size || '');
+        setMaterial(orderToEdit.material || '');
+        setSole(orderToEdit.sole || '');
+        setColor(orderToEdit.color || '');
+        setLining(orderToEdit.lining || '');
+        setClientName(orderToEdit.clientName || '');
+        setPhone(orderToEdit.phone || '');
+        setCity(orderToEdit.city || '');
+        setAddress(orderToEdit.address || '');
+        setPaymentType(orderToEdit.paymentType || 'Передплата');
+        setAdvance(orderToEdit.advance !== undefined ? String(orderToEdit.advance) : '300');
+        setDiscount(orderToEdit.discount !== undefined ? String(orderToEdit.discount) : '0');
+        setComment(orderToEdit.comment || '');
+        setPrice(orderToEdit.price !== undefined ? String(orderToEdit.price) : '');
+      } else {
+        setName('');
+        setImage('');
+        setColorImage('');
+        setSize('');
+        setMaterial('');
+        setSole('');
+        setColor('');
+        setLining('');
+        setClientName('');
+        setPhone('');
+        setCity('');
+        setAddress('');
+        setSmartText('');
+        setPaymentType('Передплата');
+        setAdvance('300');
+        setDiscount('0');
+        setComment('');
+        setPrice('');
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, orderToEdit]);
 
-  // Безпечна функція закриття (викликає пропс і підстраховує)
   const handleClose = () => {
-    if (typeof onClose === 'function') {
-      onClose();
-    }
+    if (typeof onClose === 'function') onClose();
   };
 
   let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
-  
   if (currentStock.length === 0) {
     const possibleKeys = ['dim47_stock', 'dim47_shoes', 'shoes', 'stock', 'products'];
     for (const key of possibleKeys) {
@@ -66,20 +100,15 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (!item) return false;
     const n = String(item.name || '').toLowerCase();
     const folder = String(item.folderId || '').toLowerCase();
-    
     if (folder.includes('color') || folder.includes('palet') || folder.includes('шкір') || folder.includes('замш')) return true;
     if (item.isColor || item.type === 'color') return true;
-
     const isFinishedProduct = n.includes('мюлі') || n.includes('клоги') || n.includes('оксфорд') || 
                               n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
                               n.includes('босоніжк') || n.includes('мокасин');
-    if (isFinishedProduct) return false;
-
-    return false;
+    return !isFinishedProduct && false;
   };
 
   let paletteStock = currentStock.filter(isColorOrMaterialItem);
-
   ['dim47_colors', 'palette', 'colors', 'dim47_palette'].forEach(key => {
     try {
       const saved = localStorage.getItem(key);
@@ -98,7 +127,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
   const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
   const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
-
   const filteredStockProducts = shoesStock.filter(item => 
     item && item.name && String(item.name).toLowerCase().includes(String(name).toLowerCase())
   );
@@ -109,7 +137,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (!rawText.trim()) return;
 
     let cleanText = rawText;
-
     const phoneMatch = cleanText.match(/(\+?38)?0\d{9}/);
     if (phoneMatch) {
       setPhone(phoneMatch[0]);
@@ -130,17 +157,11 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       cleanText = cleanText.replace(cityMatch[0], ' ');
     }
 
-    cleanText = cleanText
-      .replace(/область|обл\.|район|району|або|доставка|отримувач|Волинська|Львівська|Київська/gi, ' ')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
-
+    cleanText = cleanText.replace(/область|обл\.|район|району|або|доставка|отримувач|Волинська|Львівська|Київська/gi, ' ').replace(/\s{2,}/g, ' ').trim();
     const words = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
     if (words.length > 0) {
       const possibleName = words.find(w => w.split(/\s+/).length >= 2) || words[0];
-      if (possibleName) {
-        setClientName(possibleName.trim());
-      }
+      if (possibleName) setClientName(possibleName.trim());
     }
   };
 
@@ -148,7 +169,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     const newPrice = e.target.value;
     setPrice(newPrice);
     const numPrice = Number(newPrice) || 0;
-    
     setAdvance(prev => {
       if (prev === '300' || prev === '' || Number(prev) === Number(price)) {
         return numPrice > 300 ? '300' : String(numPrice);
@@ -157,26 +177,18 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     });
   };
 
-  const handleFullPayment = () => {
-    setAdvance(price);
-  };
+  const handleFullPayment = () => setAdvance(price);
 
   const handleSelectProductFromStock = (product) => {
     if (!product) return;
     setName(product.name || '');
     const prodImg = product.image || product.photo || product.img || product.colorImage;
     if (prodImg) setImage(prodImg);
-    
     if (product.price !== undefined) {
       setPrice(product.price);
       const numPrice = Number(product.price) || 0;
       setAdvance(numPrice > 300 ? '300' : String(numPrice));
     }
-    if (product.material) setMaterial(product.material);
-    if (product.sole) setSole(product.sole);
-    if (product.color) setColor(product.color);
-    if (product.size) setSize(product.size);
-
     setIsProductDropdownOpen(false);
   };
 
@@ -195,7 +207,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const handleSelectImageFromStock = (product) => {
     if (!product) return;
     const imgUrl = product.image || product.photo || product.img || product.colorImage;
-    
     if (activeImageType === 'product') {
       if (imgUrl) setImage(imgUrl);
       if (product.name) setName(product.name);
@@ -208,14 +219,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       if (imgUrl) setColorImage(imgUrl);
       if (product.name) setColor(product.name);
     }
-    
     setIsStockImagesOpen(false);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const newOrder = {
-      id: Date.now(),
+    const savedOrderData = {
+      ...(orderToEdit || {}),
+      id: orderToEdit ? orderToEdit.id : Date.now(),
       name,
       image,
       colorImage,
@@ -233,12 +244,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       discount: Number(discount) || 0,
       comment,
       price: Number(price) || 0,
-      status: 'нове',
-      createdAt: new Date().toISOString()
+      status: orderToEdit ? orderToEdit.status : 'нове',
+      createdAt: orderToEdit ? orderToEdit.createdAt : new Date().toISOString()
     };
 
     if (typeof onSave === 'function') {
-      onSave(newOrder);
+      onSave(savedOrderData);
     }
     handleClose();
   };
@@ -246,24 +257,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   if (!isOpen) return null;
 
   return (
-    <div 
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto"
-      onClick={handleClose}
-    >
-      <div 
-        className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 relative my-auto space-y-4 max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto" onClick={handleClose}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 relative my-auto space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <h2 className="text-xl font-bold text-slate-900">Нове замовлення</h2>
-          <button 
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleClose();
-            }} 
-            className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"
-          >
+          <h2 className="text-xl font-bold text-slate-900">
+            {orderToEdit ? 'Редагувати замовлення' : 'Нове замовлення'}
+          </h2>
+          <button type="button" onClick={handleClose} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1">
             <X size={20} />
           </button>
         </div>
@@ -278,18 +278,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                   <button type="button" onClick={() => setImage('')} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 shadow-xs"><X size={12}/></button>
                 </div>
               ) : (
-                <div className="w-16 h-16 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400">
-                  <ImageIcon size={24} />
-                </div>
+                <div className="w-16 h-16 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400"><ImageIcon size={24} /></div>
               )}
               <div className="flex gap-1.5 w-full justify-center">
                 <input type="file" ref={fileInputRef} onChange={(e) => handleFileUpload(e, 'product')} className="hidden" accept="image/*" />
-                <button type="button" title="Завантажити з пристрою" onClick={() => fileInputRef.current?.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
-                  <Upload size={16} />
-                </button>
-                <button type="button" title="Вибрати зі складу" onClick={() => { setActiveImageType('product'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
-                  <Search size={16} />
-                </button>
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"><Upload size={16} /></button>
+                <button type="button" onClick={() => { setActiveImageType('product'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"><Search size={16} /></button>
               </div>
             </div>
 
@@ -301,18 +295,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                   <button type="button" onClick={() => setColorImage('')} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 shadow-xs"><X size={12}/></button>
                 </div>
               ) : (
-                <div className="w-16 h-16 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400">
-                  <ImageIcon size={24} />
-                </div>
+                <div className="w-16 h-16 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400"><ImageIcon size={24} /></div>
               )}
               <div className="flex gap-1.5 w-full justify-center">
                 <input type="file" ref={colorInputRef} onChange={(e) => handleFileUpload(e, 'color')} className="hidden" accept="image/*" />
-                <button type="button" title="Завантажити з пристрою" onClick={() => colorInputRef.current?.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
-                  <Upload size={16} />
-                </button>
-                <button type="button" title="Вибрати з палітри" onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
-                  <Search size={16} />
-                </button>
+                <button type="button" onClick={() => colorInputRef.current?.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"><Upload size={16} /></button>
+                <button type="button" onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"><Search size={16} /></button>
               </div>
             </div>
           </div>
@@ -320,18 +308,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
           <div className="relative space-y-1">
             <label className="text-xs font-semibold text-slate-600">Назва товару</label>
             <div className="relative">
-              <input 
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setIsProductDropdownOpen(true);
-                }}
-                onFocus={() => setIsProductDropdownOpen(true)}
-                placeholder="Назва товару"
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
-                required
-              />
+              <input type="text" value={name} onChange={(e) => { setName(e.target.value); setIsProductDropdownOpen(true); }} onFocus={() => setIsProductDropdownOpen(true)} placeholder="Назва товару" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900" required />
               <Search className="absolute right-3 top-3 text-slate-400" size={18} />
             </div>
 
@@ -341,17 +318,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                   if (!prod) return null;
                   const prodImg = prod.image || prod.photo || prod.img || prod.colorImage;
                   return (
-                    <div
-                      key={prod.id || index}
-                      onClick={() => handleSelectProductFromStock(prod)}
-                      className="flex items-center justify-between p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none transition"
-                    >
+                    <div key={prod.id || index} onClick={() => handleSelectProductFromStock(prod)} className="flex items-center justify-between p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none transition">
                       <div className="flex items-center gap-3">
-                        {prodImg ? (
-                          <img src={prodImg} alt="" className="w-9 h-9 object-cover rounded-lg border" />
-                        ) : (
-                          <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Фото</div>
-                        )}
+                        {prodImg ? <img src={prodImg} alt="" className="w-9 h-9 object-cover rounded-lg border" /> : <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Фото</div>}
                         <div className="text-xs font-bold text-slate-900">{prod.name}</div>
                       </div>
                       {prod.price !== undefined && <div className="text-xs font-semibold text-emerald-600">{prod.price} грн</div>}
@@ -381,16 +350,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
           <div className="space-y-1 pt-2 border-t border-slate-100">
             <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-              <Wand2 size={14} className="text-amber-600" />
-              Розумне введення даних клієнта (скопіюйте текст сюди)
+              <Wand2 size={14} className="text-amber-600" /> Розумне введення даних клієнта
             </label>
-            <textarea
-              rows="2"
-              value={smartText}
-              onChange={handleSmartClientParse}
-              placeholder="Вставте сюди весь текст від клієнта..."
-              className="w-full px-3 py-2 bg-amber-50/40 border border-amber-200/70 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-            />
+            <textarea rows="2" value={smartText} onChange={handleSmartClientParse} placeholder="Вставте сюди весь текст від клієнта..." className="w-full px-3 py-2 bg-amber-50/40 border border-amber-200/70 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
           </div>
 
           <div className="space-y-2">
@@ -418,35 +380,23 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-600">Коментар до замовлення</label>
-            <textarea
-              rows="2"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Додаткові побажання..."
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
-            />
+            <textarea rows="2" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Додаткові побажання..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
           </div>
 
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={handleClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">Скасувати</button>
-            <button type="submit" className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer">Зберегти</button>
+            <button type="submit" className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer">
+              {orderToEdit ? 'Зберегти зміни' : 'Зберегти'}
+            </button>
           </div>
         </form>
       </div>
 
       {isStockImagesOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4"
-          onClick={() => setIsStockImagesOpen(false)}
-        >
-          <div 
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4" onClick={() => setIsStockImagesOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between pb-2 border-b border-slate-150">
-              <h3 className="font-bold text-slate-900 text-sm">
-                {activeImageType === 'color' ? 'Виберіть колір з палітри' : 'Виберіть зображення зі складу'}
-              </h3>
+              <h3 className="font-bold text-slate-900 text-sm">{activeImageType === 'color' ? 'Виберіть колір з палітри' : 'Виберіть зображення зі складу'}</h3>
               <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
             <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1 max-h-96">
@@ -462,17 +412,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                           <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Товар'}</div>
                         </div>
                       ) : (
-                        <div onClick={() => handleSelectImageFromStock(item)} className="border border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50 cursor-pointer hover:bg-slate-100">
-                          {item.name || 'Без фото'}
-                        </div>
+                        <div onClick={() => handleSelectImageFromStock(item)} className="border border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50 cursor-pointer hover:bg-slate-100">{item.name || 'Без фото'}</div>
                       )}
                     </div>
                   );
                 })
               ) : (
-                <div className="col-span-3 py-8 text-center text-xs text-slate-400">
-                  {activeImageType === 'color' ? 'Палітра кольорів порожня' : 'Склад порожній'}
-                </div>
+                <div className="col-span-3 py-8 text-center text-xs text-slate-400">{activeImageType === 'color' ? 'Палітра кольорів порожня' : 'Склад порожній'}</div>
               )}
             </div>
           </div>

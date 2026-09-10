@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { X, Upload, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Upload, Search, Image as ImageIcon, Wand2, Receipt } from 'lucide-react';
 
 export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [name, setName] = useState('');
@@ -19,10 +19,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [smartText, setSmartText] = useState('');
   
   const [paymentType, setPaymentType] = useState('Передплата');
-  const [advance, setAdvance] = useState('');
+  const [advance, setAdvance] = useState('300'); // Автоматично 300 за замовчуванням
   const [discount, setDiscount] = useState('0');
   const [comment, setComment] = useState('');
   const [price, setPrice] = useState('');
+
+  // Нові поля для ПРРО / фіскалізації
+  const [isFiscal, setIsFiscal] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState('Картка (ПромПей / LiqPay / По реквізитах)');
 
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
   const [isStockImagesOpen, setIsStockImagesOpen] = useState(false);
@@ -30,6 +34,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
   const fileInputRef = useRef(null);
   const colorInputRef = useRef(null);
+
+  // Скидання / ініціалізація дефолтної передплати при відкритті
+  useEffect(() => {
+    if (isOpen) {
+      setAdvance('300');
+      setIsFiscal(true);
+    }
+  }, [isOpen]);
 
   let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
   
@@ -51,17 +63,17 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (folder.includes('color') || folder.includes('palet') || folder.includes('шкір') || folder.includes('замш')) return true;
 
     const isFinishedProduct = n.includes('мюлі') || n.includes('клоги') || n.includes('оксфорд') || 
-                              n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
-                              n.includes('босоніжк') || n.includes('мокасин');
+                            n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
+                            n.includes('босоніжк') || n.includes('мокасин');
     if (isFinishedProduct) return false;
 
     const hasMaterialKeywords = n.includes('замш') || n.includes('шкір') || n.includes('лак') || 
-                                n.includes('нубук') || n.includes('пітона') || n.includes('рептилі');
+                              n.includes('нубук') || n.includes('пітона') || n.includes('рептилі');
     const hasColorKeywords = n.includes('червон') || n.includes('чорн') || n.includes('біл') || 
-                             n.includes('беж') || n.includes('риж') || n.includes('син') || 
-                             n.includes('зелен') || n.includes('жовт') || n.includes('сір') || 
-                             n.includes('рожев') || n.includes('коричневих') || n.includes('оливк') ||
-                             n.includes('пудр') || n.includes('бордо') || n.includes('молок') || n.includes('део');
+                           n.includes('беж') || n.includes('риж') || n.includes('син') || 
+                           n.includes('зелен') || n.includes('жовт') || n.includes('сір') || 
+                           n.includes('рожев') || n.includes('коричневих') || n.includes('оливк') ||
+                           n.includes('пудр') || n.includes('бордо') || n.includes('молок') || n.includes('део');
 
     return hasMaterialKeywords || hasColorKeywords || item.isColor || item.type === 'color';
   };
@@ -132,13 +144,35 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   };
 
+  const handlePriceChange = (e) => {
+    const newPrice = e.target.value;
+    setPrice(newPrice);
+
+    const numPrice = Number(newPrice) || 0;
+    
+    setAdvance(prev => {
+      if (prev === '300' || prev === '' || Number(prev) === Number(price)) {
+        return numPrice > 300 ? '300' : String(numPrice);
+      }
+      return prev;
+    });
+  };
+
+  const handleFullPayment = () => {
+    setAdvance(price);
+  };
+
   const handleSelectProductFromStock = (product) => {
     if (!product) return;
     setName(product.name || '');
     const prodImg = product.image || product.photo || product.img || product.colorImage;
     if (prodImg) setImage(prodImg);
     
-    if (product.price !== undefined) setPrice(product.price);
+    if (product.price !== undefined) {
+      setPrice(product.price);
+      const numPrice = Number(product.price) || 0;
+      setAdvance(numPrice > 300 ? '300' : String(numPrice));
+    }
     if (product.material) setMaterial(product.material);
     if (product.sole) setSole(product.sole);
     if (product.color) setColor(product.color);
@@ -166,7 +200,11 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (activeImageType === 'product') {
       if (imgUrl) setImage(imgUrl);
       if (product.name) setName(product.name);
-      if (product.price !== undefined) setPrice(product.price);
+      if (product.price !== undefined) {
+        setPrice(product.price);
+        const numPrice = Number(product.price) || 0;
+        setAdvance(numPrice > 300 ? '300' : String(numPrice));
+      }
     } else if (activeImageType === 'color') {
       if (imgUrl) setColorImage(imgUrl);
       if (product.name) setColor(product.name);
@@ -197,10 +235,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       comment,
       price: Number(price) || 0,
       status: 'нове',
+      // Додано параметри фіскалізації ПРРО
+      isFiscal,
+      paymentMethod,
       createdAt: new Date().toISOString()
     };
 
-    // Безпечний виклик onSave, щоб не падало, якщо забули передати пропс у батьківському компоненті
     if (typeof onSave === 'function') {
       onSave(newOrder);
     } else {
@@ -362,12 +402,51 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
             <div>
               <label className="text-[11px] font-semibold text-slate-500">Вартість товару (грн)</label>
-              <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-emerald-700" />
+              <input type="number" value={price} onChange={handlePriceChange} placeholder="0" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-emerald-700" />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-slate-500">Передплата (грн)</label>
+              <div className="flex justify-between items-center">
+                <label className="text-[11px] font-semibold text-slate-500">Передплата (грн)</label>
+                <button
+                  type="button"
+                  onClick={handleFullPayment}
+                  className="text-[10px] font-bold text-amber-700 hover:underline cursor-pointer"
+                >
+                  Повна оплата
+                </button>
+              </div>
               <input type="number" value={advance} onChange={(e) => setAdvance(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             </div>
+          </div>
+
+          {/* Блок налаштування ПРРО / Фіскалізації */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 cursor-pointer">
+                <Receipt size={14} className="text-emerald-600" />
+                Фіскалізувати продаж (Checkbox / NovaPay)
+              </label>
+              <input 
+                type="checkbox" 
+                checked={isFiscal} 
+                onChange={(e) => setIsFiscal(e.target.checked)}
+                className="w-4 h-4 accent-slate-900 rounded cursor-pointer"
+              />
+            </div>
+            {isFiscal && (
+              <div>
+                <label className="text-[10px] font-medium text-slate-500">Форма оплати для чека:</label>
+                <select 
+                  value={paymentMethod} 
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                >
+                  <option value="Картка (ПромПей / LiqPay / По реквізитах)">Картка (ПромПей / LiqPay / По реквізитах)</option>
+                  <option value="Готівка">Готівка</option>
+                  <option value="Післяплата (NovaPay)">Післяплата (NovaPay)</option>
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">

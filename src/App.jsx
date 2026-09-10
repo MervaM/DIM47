@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { db } from './firebase';
 import Header from './components/header/header';
 import Dashboard from './components/dashboard/dashboard';
 import Orders from './components/orders/orders';
@@ -8,69 +10,72 @@ import Finances from './components/finances/finances';
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  const [stock, setStock] = useState(() => {
-    const saved = localStorage.getItem('dim47_stock');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [stock, setStock] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [finances, setFinances] = useState([]); // Можна згодом теж підключити до бази, якщо потрібно
 
-  const [folders, setFolders] = useState(() => {
-    const saved = localStorage.getItem('dim47_folders_struct');
-    return saved ? JSON.parse(saved) : [
-      { id: 'shoes', name: 'Взуття', type: 'root', icon: '🥿' },
-      { id: 'boxes', name: 'Коробки', type: 'root', icon: '📦' },
-      { 
-        id: 'fabrics', 
-        name: 'Зразки тканин', 
-        type: 'root', 
-        icon: '🧵',
-        subfolders: [
-          { id: 'suede', name: 'Зразки замша' },
-          { id: 'leather', name: 'Зразки шкіра' }
-        ]
-      },
-      { id: 'dustbags', name: 'Пильовики', type: 'root', icon: '🛍️' },
-    ];
-  });
+  const [folders, setFolders] = useState([
+    { id: 'shoes', name: 'Взуття', type: 'root', icon: '🥿' },
+    { id: 'boxes', name: 'Коробки', type: 'root', icon: '📦' },
+    { 
+      id: 'fabrics', 
+      name: 'Зразки тканин', 
+      type: 'root', 
+      icon: '🧵',
+      subfolders: [
+        { id: 'suede', name: 'Зразки замша' },
+        { id: 'leather', name: 'Зразки шкіра' }
+      ]
+    },
+    { id: 'dustbags', name: 'Пильовики', type: 'root', icon: '🛍️' },
+  ]);
 
   const [currentFolderId, setCurrentFolderId] = useState(null);
-
-  const [orders, setOrders] = useState(() => {
-    const saved = localStorage.getItem('dim47_orders');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [finances, setFinances] = useState(() => {
-    const saved = localStorage.getItem('dim47_finances');
-    return saved ? JSON.parse(saved) : [];
-  });
-
   const [finReportPeriod, setFinReportPeriod] = useState('month');
 
+  // Підписка на оновлення з Firebase в реальному часі для складу і замовлень
   useEffect(() => {
-    localStorage.setItem('dim47_stock', JSON.stringify(stock));
-    localStorage.setItem('dim47_folders_struct', JSON.stringify(folders));
-    localStorage.setItem('dim47_orders', JSON.stringify(orders));
-    localStorage.setItem('dim47_finances', JSON.stringify(finances));
-  }, [stock, folders, orders, finances]);
-
-  // Глобальна функція для додавання/редагування товару на складі
-  const handleAddItem = (newItem) => {
-    setStock(prevStock => {
-      const existingIndex = prevStock.findIndex(item => item.id === newItem.id);
-      if (existingIndex >= 0) {
-        // Якщо товар з таким ID вже є — оновлюємо його
-        const updated = [...prevStock];
-        updated[existingIndex] = newItem;
-        return updated;
-      }
-      // Якщо це новий товар — додаємо його у загальний список
-      return [newItem, ...prevStock];
+    // Слухаємо колекцію 'stock' у Firestore
+    const unsubscribeStock = onSnapshot(collection(db, 'stock'), (snapshot) => {
+      const items = snapshot.docs.map(docSnapshot => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data()
+      }));
+      setStock(items);
     });
+
+    // Слухаємо колекцію 'orders' у Firestore
+    const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
+      const items = snapshot.docs.map(docSnapshot => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data()
+      }));
+      setOrders(items);
+    });
+
+    return () => {
+      unsubscribeStock();
+      unsubscribeOrders();
+    };
+  }, []);
+
+  // Додавання або оновлення товару на складі у Firebase
+  const handleAddItem = async (newItem) => {
+    try {
+      const itemId = String(newItem.id);
+      await setDoc(doc(db, 'stock', itemId), newItem);
+    } catch (error) {
+      console.error("Помилка збереження товару:", error);
+    }
   };
 
-  // Глобальна функція для видалення товару зі складу
-  const handleDeleteItem = (itemId) => {
-    setStock(prevStock => prevStock.filter(item => item.id !== itemId));
+  // Видалення товару зі складу у Firebase
+  const handleDeleteItem = async (itemId) => {
+    try {
+      await deleteDoc(doc(db, 'stock', String(itemId)));
+    } catch (error) {
+      console.error("Помилка видалення товару:", error);
+    }
   };
 
   const totalIncome = finances.filter(f => f.type === 'Дохід').reduce((acc, curr) => acc + curr.amount, 0);
@@ -81,10 +86,8 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-[#f8f9fa] text-slate-800 font-sans overflow-hidden">
-      {/* Верхня панель (Header) */}
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* Основний контент на всю ширину */}
       <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-10">
         {activeTab === 'dashboard' && (
           <Dashboard 

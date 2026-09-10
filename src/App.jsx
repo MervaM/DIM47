@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from './js/firebase';
+import { db } from './js/firebase'; // Перевірте, чи шлях точно збігається з розташуванням вашого файлу
 import Header from './components/header/header';
 import Dashboard from './components/dashboard/dashboard';
 import Orders from './components/orders/orders';
@@ -34,7 +34,7 @@ export default function App() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [finReportPeriod, setFinReportPeriod] = useState('month');
 
-  // Підписка на оновлення з Firebase в реальному часі
+  // Підписка на оновлення з Firebase в реальному часі для складу та замовлень
   useEffect(() => {
     const unsubscribeStock = onSnapshot(collection(db, 'stock'), (snapshot) => {
       const items = snapshot.docs.map(docSnapshot => ({
@@ -42,6 +42,8 @@ export default function App() {
         ...docSnapshot.data()
       }));
       setStock(items);
+    }, (error) => {
+      console.error("Помилка завантаження складу:", error);
     });
 
     const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
@@ -50,6 +52,8 @@ export default function App() {
         ...docSnapshot.data()
       }));
       setOrders(items);
+    }, (error) => {
+      console.error("Помилка завантаження замовлень:", error);
     });
 
     return () => {
@@ -58,30 +62,31 @@ export default function App() {
     };
   }, []);
 
-  // Виправлена функція збереження з гарантованим folderId для взуття
+  // Універсальна функція додавання/редагування товару в Firestore
   const handleAddItem = async (newItem) => {
     try {
       const itemId = String(newItem.id || Date.now());
       
-      // Якщо це папка взуття або додається з ShoesFolder, примусово ставимо folderId: 'shoes'
       const itemToSave = {
         ...newItem,
         id: itemId,
-        folderId: newItem.folderId || (currentFolderId === 'shoes' ? 'shoes' : 'shoes'),
+        folderId: newItem.folderId || currentFolderId || 'shoes',
         createdAt: newItem.createdAt || Date.now()
       };
 
-      await setDoc(doc(db, 'stock', itemId), itemToSave);
-      console.log("Товар/взуття успішно збережено у Firebase!");
+      await setDoc(doc(db, 'stock', itemId), itemToSave, { merge: true });
+      console.log("Товар успішно збережено у Firebase!");
     } catch (error) {
       console.error("Помилка збереження товару:", error);
       alert("Помилка збереження: " + error.message);
     }
   };
 
+  // Функція видалення товару з Firestore
   const handleDeleteItem = async (itemId) => {
     try {
       await deleteDoc(doc(db, 'stock', String(itemId)));
+      console.log("Товар успішно видалено з Firebase!");
     } catch (error) {
       console.error("Помилка видалення товару:", error);
       alert("Помилка видалення: " + error.message);

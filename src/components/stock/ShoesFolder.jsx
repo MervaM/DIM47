@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit3, X, Search } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../firebaseConfig'; // Перевірте шлях до вашого файлу конфігурації firebase
+import { db } from '../firebaseConfig'; // Перевірте шлях: якщо файл у тій самій папці, змініть на './firebaseConfig'
 
 export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDetails }) {
   const [showModal, setShowModal] = useState(false);
@@ -122,16 +122,15 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     };
 
     try {
-      // Зберігаємо безпосередньо у Firestore у колекцію "stock" під унікальним ID
       const docRef = doc(db, 'stock', itemId);
       await setDoc(docRef, newItem, { merge: true });
-      
-      // Оновлюємо локальний стейт після успішного запису в базу
+      console.log("Успішно збережено у Firebase Firestore під ID:", itemId);
+
       onAddItem(newItem);
       setShowModal(false);
     } catch (error) {
       console.error("Помилка збереження у Firebase:", error);
-      alert("Не вдалося зберегти дані у базу даних. Перевірте консоль.");
+      alert("Помилка збереження в базу даних. Перевірте консоль.");
     }
   };
 

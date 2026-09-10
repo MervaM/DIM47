@@ -34,41 +34,6 @@ export default function App() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [finReportPeriod, setFinReportPeriod] = useState('month');
 
-  // Примусова міграція та виправлення folderId у Firebase
-  useEffect(() => {
-    const migrateLocalData = async () => {
-      try {
-        const savedStock = localStorage.getItem('dim47_stock');
-        if (savedStock) {
-          const parsedStock = JSON.parse(savedStock);
-          for (const item of parsedStock) {
-            const itemId = String(item.id || Date.now());
-            
-            let fixedFolderId = item.folderId;
-            if (!fixedFolderId) {
-              const nameLower = (item.name || '').toLowerCase();
-              if (nameLower.includes('коробк')) {
-                fixedFolderId = 'boxes';
-              } else if (nameLower.includes('пильовик')) {
-                fixedFolderId = 'dustbags';
-              } else {
-                fixedFolderId = 'shoes';
-              }
-            }
-
-            const fixedItem = { ...item, folderId: fixedFolderId };
-            await setDoc(doc(db, 'stock', itemId), fixedItem);
-          }
-          console.log("Склад успішно мігровано та виправлено з folderId!");
-        }
-      } catch (error) {
-        console.error("Помилка міграції:", error);
-      }
-    };
-
-    migrateLocalData();
-  }, []);
-
   // Підписка на оновлення з Firebase в реальному часі
   useEffect(() => {
     const unsubscribeStock = onSnapshot(collection(db, 'stock'), (snapshot) => {
@@ -93,11 +58,21 @@ export default function App() {
     };
   }, []);
 
+  // Виправлена функція збереження з гарантованим folderId для взуття
   const handleAddItem = async (newItem) => {
     try {
       const itemId = String(newItem.id || Date.now());
-      await setDoc(doc(db, 'stock', itemId), newItem);
-      console.log("Товар успішно збережено!");
+      
+      // Якщо це папка взуття або додається з ShoesFolder, примусово ставимо folderId: 'shoes'
+      const itemToSave = {
+        ...newItem,
+        id: itemId,
+        folderId: newItem.folderId || (currentFolderId === 'shoes' ? 'shoes' : 'shoes'),
+        createdAt: newItem.createdAt || Date.now()
+      };
+
+      await setDoc(doc(db, 'stock', itemId), itemToSave);
+      console.log("Товар/взуття успішно збережено у Firebase!");
     } catch (error) {
       console.error("Помилка збереження товару:", error);
       alert("Помилка збереження: " + error.message);

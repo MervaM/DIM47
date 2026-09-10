@@ -17,7 +17,7 @@ export default function App() {
   const [folders, setFolders] = useState([
     { id: 'shoes', name: 'Взуття', type: 'root', icon: '🥿' },
     { id: 'boxes', name: 'Коробки', type: 'root', icon: '📦' },
-    { id: 'palette', name: 'Палітра', type: 'root', icon: '🎨' },
+    { id: 'palettes', name: 'Палітра', type: 'root', icon: '🎨' },
     { 
       id: 'fabrics', 
       name: 'Зразки тканин', 
@@ -44,7 +44,6 @@ export default function App() {
           for (const item of parsedStock) {
             const itemId = String(item.id || Date.now());
             
-            // Визначаємо правильну папку, якщо вона не була задана
             let fixedFolderId = item.folderId;
             if (!fixedFolderId) {
               const nameLower = (item.name || '').toLowerCase();
@@ -53,7 +52,6 @@ export default function App() {
               } else if (nameLower.includes('пильовик')) {
                 fixedFolderId = 'dustbags';
               } else {
-                // Усе інше за замовчуванням летить у взуття
                 fixedFolderId = 'shoes';
               }
             }

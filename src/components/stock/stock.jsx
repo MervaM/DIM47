@@ -237,8 +237,8 @@ export default function Stock({ stock, setStock, onAddItem, onDeleteItem }) {
 
             <div className="flex justify-end pt-2">
               <button 
-                onClick={() => setSelectedItemDetails(null)} 
-                className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                onClick={() => setSelectedItemDetails(null)}
+                className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold cursor-pointer"
               >
                 Закрити
               </button>

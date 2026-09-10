@@ -37,6 +37,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   }, [isOpen]);
 
+  // Безпечна функція закриття (викликає пропс і підстраховує)
   const handleClose = () => {
     if (typeof onClose === 'function') {
       onClose();
@@ -171,7 +172,10 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       const numPrice = Number(product.price) || 0;
       setAdvance(numPrice > 300 ? '300' : String(numPrice));
     }
-    // Характеристики навмисне не підтягуються автоматично
+    if (product.material) setMaterial(product.material);
+    if (product.sole) setSole(product.sole);
+    if (product.color) setColor(product.color);
+    if (product.size) setSize(product.size);
 
     setIsProductDropdownOpen(false);
   };
@@ -202,7 +206,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       }
     } else if (activeImageType === 'color') {
       if (imgUrl) setColorImage(imgUrl);
-      if (product.name) setColor(product.name); // Назва з палітри кольору може й залишатись або теж прибратися, тут залишено для кольору
+      if (product.name) setColor(product.name);
     }
     
     setIsStockImagesOpen(false);

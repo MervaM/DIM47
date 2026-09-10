@@ -257,13 +257,9 @@ export default function Dashboard() {
 
       <NewOrderModal 
         isOpen={showNewOrderModal}
-        onClose={() => {
-          setShowNewOrderModal(false);
-          setEditingId(null);
-        }}
+        onClose={() => setShowNewOrderModal(false)}
         onSave={handleSaveOrder}
         stock={stockProducts}
-        orderToEdit={orders.find(o => o.id === editingId)}
       />
     </div>
   );

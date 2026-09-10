@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './js/firebase';
 import Header from './components/header/header';
 import Dashboard from './components/dashboard/dashboard';
@@ -33,21 +33,34 @@ export default function App() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [finReportPeriod, setFinReportPeriod] = useState('month');
 
-  // Міграція зі старого localStorage у Firebase (робиться один раз, якщо в базі пусто)
+  // Примусова міграція та виправлення folderId у Firebase
   useEffect(() => {
     const migrateLocalData = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'stock'));
-        if (querySnapshot.empty) {
-          const savedStock = localStorage.getItem('dim47_stock');
-          if (savedStock) {
-            const parsedStock = JSON.parse(savedStock);
-            for (const item of parsedStock) {
-              const itemId = String(item.id || Date.now());
-              await setDoc(doc(db, 'stock', itemId), item);
+        const savedStock = localStorage.getItem('dim47_stock');
+        if (savedStock) {
+          const parsedStock = JSON.parse(savedStock);
+          for (const item of parsedStock) {
+            const itemId = String(item.id || Date.now());
+            
+            // Визначаємо правильну папку, якщо вона не була задана
+            let fixedFolderId = item.folderId;
+            if (!fixedFolderId) {
+              const nameLower = (item.name || '').toLowerCase();
+              if (nameLower.includes('коробк')) {
+                fixedFolderId = 'boxes';
+              } else if (nameLower.includes('пильовик')) {
+                fixedFolderId = 'dustbags';
+              } else {
+                // Усе інше за замовчуванням летить у взуття
+                fixedFolderId = 'shoes';
+              }
             }
-            console.log("Старий склад успішно перенесено у Firebase!");
+
+            const fixedItem = { ...item, folderId: fixedFolderId };
+            await setDoc(doc(db, 'stock', itemId), fixedItem);
           }
+          console.log("Склад успішно мігровано та виправлено з folderId!");
         }
       } catch (error) {
         console.error("Помилка міграції:", error);

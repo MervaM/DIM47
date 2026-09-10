@@ -67,7 +67,9 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
 
   const handleSave = (e) => {
     e.preventDefault();
-    onAddItem({
+    console.log("--> handleSave викликано! Назва моделі:", formName);
+
+    const newItem = {
       id: editingItem ? editingItem.id : Date.now(),
       folderId: 'shoes',
       name: formName || 'Модель взуття',
@@ -82,7 +84,10 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
       cost: formCost !== '' ? Number(formCost) : '',
       image: formImage,
       status: 'зразок'
-    });
+    };
+
+    console.log("--> Викликаємо onAddItem з об'єктом:", newItem);
+    onAddItem(newItem);
     setShowModal(false);
   };
 

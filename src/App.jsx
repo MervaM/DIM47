@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { db } from './js/firebase';
 import Header from './components/header/header';
 import Dashboard from './components/dashboard/dashboard';
 import Orders from './components/orders/orders';
@@ -12,7 +12,7 @@ export default function App() {
 
   const [stock, setStock] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [finances, setFinances] = useState([]); // Можна згодом теж підключити до бази, якщо потрібно
+  const [finances, setFinances] = useState([]);
 
   const [folders, setFolders] = useState([
     { id: 'shoes', name: 'Взуття', type: 'root', icon: '🥿' },
@@ -35,7 +35,6 @@ export default function App() {
 
   // Підписка на оновлення з Firebase в реальному часі для складу і замовлень
   useEffect(() => {
-    // Слухаємо колекцію 'stock' у Firestore
     const unsubscribeStock = onSnapshot(collection(db, 'stock'), (snapshot) => {
       const items = snapshot.docs.map(docSnapshot => ({
         id: docSnapshot.id,
@@ -44,7 +43,6 @@ export default function App() {
       setStock(items);
     });
 
-    // Слухаємо колекцію 'orders' у Firestore
     const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
       const items = snapshot.docs.map(docSnapshot => ({
         id: docSnapshot.id,

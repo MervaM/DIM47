@@ -18,14 +18,16 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
 
-  const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Відмова'];
+  // Додано статус 'Успішно'
+  const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Успішно', 'Відмова'];
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
   const sortOrdersList = (ordersArray) => {
-    const isCompleted = (status) => status === 'Доставка' || status === 'Відмова';
+    // Додано 'Успішно' до списку завершених статусів, щоб вони опускалися в кінець списку
+    const isCompleted = (status) => status === 'Доставка' || status === 'Успішно' || status === 'Відмова';
 
     return [...ordersArray].sort((a, b) => {
       const compA = isCompleted(a.status);
@@ -105,12 +107,9 @@ export default function Dashboard() {
 
   const handleEditOrder = (order) => {
     setEditingId(order.id);
-    // Якщо твоє модальне вікно підтримує передачу поточної моделі для редагування, 
-    // передай її або заповни відповідні стейти в модалці.
     setShowNewOrderModal(true);
   };
 
-  // Головна функція збереження, яка приймає готовий об'єкт замовлення з модалки
   const handleSaveOrder = async (orderData) => {
     try {
       const dbPayload = {
@@ -237,10 +236,9 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Передаємо onSave замість купи окремих стейтів */}
       <NewOrderModal 
         isOpen={showNewOrderModal}
-        onClose={() => setShowNewOrderModal(false)}
+        onClose={() => setShowNewOrderModal5 => setShowNewOrderModal(false)}
         onSave={handleSaveOrder}
       />
     </div>

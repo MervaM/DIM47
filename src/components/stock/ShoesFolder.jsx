@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Plus, Trash2, Edit3, X, Search } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../../js/firebase';
+import { db } from '../../firebase';
 
 export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDetails }) {
+  const imageInputRef = useRef(null);
+
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
@@ -96,8 +98,8 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     }
   };
 
-  // Пряме збереження у Firestore з гарантією створення колекції stock
-  const handleSave = async () => {
+  const handleSave = async (e) => {
+    e.preventDefault();
     if (!formName.trim()) {
       alert("Введіть назву моделі!");
       return;
@@ -123,16 +125,16 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     };
 
     try {
-      // Записуємо напряму у базу даних Firebase у колекцію 'stock'
-      await setDoc(doc(db, 'stock', itemId), newItem);
-      console.log("Успішно записано у Firebase Firestore у колекцію stock під ID:", itemId);
+      // Зберігаємо напряму у Firestore у колекцію 'stock'
+      const docRef = doc(db, 'stock', itemId);
+      await setDoc(docRef, newItem, { merge: true });
+      console.log("Успішно збережено у колекцію 'stock' під ID:", itemId);
 
-      // Також оновлюємо стан в інтерфейсі
       onAddItem(newItem);
       setShowModal(false);
     } catch (error) {
-      console.error("Помилка запису у Firebase:", error);
-      alert("Помилка збереження в базу даних: " + error.message);
+      console.error("Помилка збереження у Firebase:", error);
+      alert("Помилка збереження: " + error.message);
     }
   };
 
@@ -249,7 +251,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
               <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={20}/></button>
             </div>
             
-            <div className="flex flex-col gap-3">
+            <form onSubmit={handleSave} className="flex flex-col gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Назва моделі</label>
                 <input 
@@ -333,7 +335,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Фото моделі</label>
-                <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs" />
+                <input type="file" accept="image/*" ref={imageInputRef} onChange={handleImageUpload} className="text-xs" />
                 {formImage && <p className="text-[10px] text-emerald-600 mt-1">✓ Зображення успішно завантажено та стиснуто</p>}
               </div>
 
@@ -346,14 +348,13 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                   Скасувати
                 </button>
                 <button 
-                  type="button" 
-                  onClick={handleSave} 
+                  type="submit" 
                   className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold cursor-pointer"
                 >
                   Зберегти
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}

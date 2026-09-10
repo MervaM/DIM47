@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from './js/firebase';
+import { db } from './firebase';
 import Header from './components/header/header';
 import Dashboard from './components/dashboard/dashboard';
 import Orders from './components/orders/orders';

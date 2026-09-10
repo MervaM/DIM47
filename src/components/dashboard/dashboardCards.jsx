@@ -64,6 +64,7 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
                 <option value="Нове">Нове</option>
                 <option value="В роботі">В роботі</option>
                 <option value="Доставка">Доставка</option>
+                <option value="Успішно">Успішно</option>
                 <option value="Відмова">Відмова</option>
               </select>
 
@@ -110,14 +111,14 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
             ) : null}
 
             {/* Назва та характеристики */}
-            <div className="text-center pt-1">
-              <h3 className="text-xs font-bold text-slate-700">{order.productTitle}</h3>
+            <div className="text-center pt-1 px-1 space-y-0.5">
+              <h3 className="text-sm font-bold text-slate-900">{order.productTitle}</h3>
               {cleanDetails && (
-                <p className="text-sm font-bold text-slate-900 mt-0.5">{cleanDetails}</p>
+                <p className="text-base font-extrabold text-slate-950 tracking-tight">{cleanDetails}</p>
               )}
             </div>
 
-            {/* ДАНІ ПОКУПЦЯ (ПІБ МАКСИМАЛЬНО ВЕЛИКЕ ТА ЖИРНЕ) */}
+            {/* ДАНІ ПОКУПЦЯ */}
             <div 
               onClick={(e) => handleCopyClient(order, e)}
               className={`py-2 px-3 border rounded-xl transition cursor-pointer relative flex items-center justify-between ${

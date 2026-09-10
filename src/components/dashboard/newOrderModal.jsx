@@ -1,56 +1,45 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 
-export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], orderToEdit = null }) {
+export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], orderToEdit }) {
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
   const [colorImage, setColorImage] = useState('');
-  
   const [size, setSize] = useState('');
   const [material, setMaterial] = useState('');
   const [sole, setSole] = useState('');
   const [color, setColor] = useState('');
   const [lining, setLining] = useState('');
-  
   const [clientName, setClientName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [smartText, setSmartText] = useState('');
-  
   const [paymentType, setPaymentType] = useState('Передплата');
   const [advance, setAdvance] = useState('300');
   const [discount, setDiscount] = useState('0');
   const [comment, setComment] = useState('');
   const [price, setPrice] = useState('');
 
-  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
-  const [isStockImagesOpen, setIsStockImagesOpen] = useState(false);
-  const [activeImageType, setActiveImageType] = useState(null);
-
-  const fileInputRef = useRef(null);
-  const colorInputRef = useRef(null);
-
-  // Автоматично заповнюємо або очищуємо форму при відкритті
+  // Заповнення або очищення полів при відкритті модалки
   useEffect(() => {
     if (isOpen) {
       if (orderToEdit) {
-        setName(orderToEdit.name || '');
+        setName(orderToEdit.productTitle || orderToEdit.name || '');
         setImage(orderToEdit.image || '');
         setColorImage(orderToEdit.colorImage || '');
         setSize(orderToEdit.size || '');
         setMaterial(orderToEdit.material || '');
         setSole(orderToEdit.sole || '');
-        setColor(orderToEdit.color || '');
-        setLining(orderToEdit.lining || '');
-        setClientName(orderToEdit.clientName || '');
-        setPhone(orderToEdit.phone || '');
+        setColor(orderToEdit.colorText || orderToEdit.color || '');
+        setLining(orderToEdit.filling || orderToEdit.lining || '');
+        setClientName(orderToEdit.client || orderToEdit.clientName || '');
+        setPhone(orderToEdit.phone || orderToEdit.clientPhone || '');
         setCity(orderToEdit.city || '');
-        setAddress(orderToEdit.address || '');
-        setPaymentType(orderToEdit.paymentType || 'Передплата');
-        setAdvance(orderToEdit.advance !== undefined ? String(orderToEdit.advance) : '300');
+        setAddress(orderToEdit.warehouse || orderToEdit.address || '');
+        setPaymentType(orderToEdit.payment || orderToEdit.paymentType || 'Передплата');
+        setAdvance(orderToEdit.advance !== undefined ? String(orderToEdit.advance) : '0');
         setDiscount(orderToEdit.discount !== undefined ? String(orderToEdit.discount) : '0');
-        setComment(orderToEdit.comment || '');
+        setComment(orderToEdit.note || orderToEdit.comment || '');
         setPrice(orderToEdit.price !== undefined ? String(orderToEdit.price) : '');
       } else {
         setName('');
@@ -75,158 +64,11 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], ord
     }
   }, [isOpen, orderToEdit]);
 
-  const handleClose = () => {
-    if (typeof onClose === 'function') onClose();
-  };
-
-  let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
-  if (currentStock.length === 0) {
-    const possibleKeys = ['dim47_stock', 'dim47_shoes', 'shoes', 'stock', 'products'];
-    for (const key of possibleKeys) {
-      try {
-        const saved = localStorage.getItem(key);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            currentStock = parsed;
-            break;
-          }
-        }
-      } catch (e) {}
-    }
-  }
-
-  const isColorOrMaterialItem = (item) => {
-    if (!item) return false;
-    const n = String(item.name || '').toLowerCase();
-    const folder = String(item.folderId || '').toLowerCase();
-    if (folder.includes('color') || folder.includes('palet') || folder.includes('шкір') || folder.includes('замш')) return true;
-    if (item.isColor || item.type === 'color') return true;
-    const isFinishedProduct = n.includes('мюлі') || n.includes('клоги') || n.includes('оксфорд') || 
-                              n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
-                              n.includes('босоніжк') || n.includes('мокасин');
-    return !isFinishedProduct && false;
-  };
-
-  let paletteStock = currentStock.filter(isColorOrMaterialItem);
-  ['dim47_colors', 'palette', 'colors', 'dim47_palette'].forEach(key => {
-    try {
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          paletteStock = [...paletteStock, ...parsed.filter(isColorOrMaterialItem)];
-        }
-      }
-    } catch (e) {}
-  });
-
-  paletteStock = Array.from(new Set(paletteStock.map(item => item?.id || item?.name)))
-    .map(id => paletteStock.find(item => (item?.id || item?.name) === id))
-    .filter(Boolean);
-
-  const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
-  const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
-  const filteredStockProducts = shoesStock.filter(item => 
-    item && item.name && String(item.name).toLowerCase().includes(String(name).toLowerCase())
-  );
-
-  const handleSmartClientParse = (eOrText) => {
-    const rawText = typeof eOrText === 'string' ? eOrText : (eOrText?.target?.value ?? '');
-    setSmartText(rawText);
-    if (!rawText.trim()) return;
-
-    let cleanText = rawText;
-    const phoneMatch = cleanText.match(/(\+?38)?0\d{9}/);
-    if (phoneMatch) {
-      setPhone(phoneMatch[0]);
-      cleanText = cleanText.replace(phoneMatch[0], ' ');
-    }
-
-    const addressMatch = cleanText.match(/(?:відділення|нп|пошта|№)\s*[\w№\-]*\s*\d+/i) || cleanText.match(/№\s*\d+/i) || cleanText.match(/(?:відділення|нп)\s*№?\s*\d+/i);
-    if (addressMatch) {
-      setAddress(addressMatch[0].trim());
-      cleanText = cleanText.replace(addressMatch[0], ' ');
-    }
-
-    const ukraineCities = /Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-|Чернівц|Ужгород|Хмельницьк|Вінниц|Черкас|Полтав|Суми|Запоріжжя|Миколаїв|Кропивницьк|Луцьк|Чернігів|Нововолинськ|Ковель|Володимир/i;
-    const cityMatch = cleanText.match(/(?:м\.|місто)\s*([А-ЯІЄЇҐ][а-яієїґ]+(?:[- ][А-ЯІЄЇҐ][а-яієїґ]+)?)/i) || cleanText.match(ukraineCities);
-    if (cityMatch) {
-      const foundCity = cityMatch[1] || cityMatch[0];
-      setCity(foundCity.replace(/місто|м\./gi, '').trim());
-      cleanText = cleanText.replace(cityMatch[0], ' ');
-    }
-
-    cleanText = cleanText.replace(/область|обл\.|район|району|або|доставка|отримувач|Волинська|Львівська|Київська/gi, ' ').replace(/\s{2,}/g, ' ').trim();
-    const words = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
-    if (words.length > 0) {
-      const possibleName = words.find(w => w.split(/\s+/).length >= 2) || words[0];
-      if (possibleName) setClientName(possibleName.trim());
-    }
-  };
-
-  const handlePriceChange = (e) => {
-    const newPrice = e.target.value;
-    setPrice(newPrice);
-    const numPrice = Number(newPrice) || 0;
-    setAdvance(prev => {
-      if (prev === '300' || prev === '' || Number(prev) === Number(price)) {
-        return numPrice > 300 ? '300' : String(numPrice);
-      }
-      return prev;
-    });
-  };
-
-  const handleFullPayment = () => setAdvance(price);
-
-  const handleSelectProductFromStock = (product) => {
-    if (!product) return;
-    setName(product.name || '');
-    const prodImg = product.image || product.photo || product.img || product.colorImage;
-    if (prodImg) setImage(prodImg);
-    if (product.price !== undefined) {
-      setPrice(product.price);
-      const numPrice = Number(product.price) || 0;
-      setAdvance(numPrice > 300 ? '300' : String(numPrice));
-    }
-    setIsProductDropdownOpen(false);
-  };
-
-  const handleFileUpload = (e, type) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (type === 'product') setImage(reader.result);
-        else setColorImage(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSelectImageFromStock = (product) => {
-    if (!product) return;
-    const imgUrl = product.image || product.photo || product.img || product.colorImage;
-    if (activeImageType === 'product') {
-      if (imgUrl) setImage(imgUrl);
-      if (product.name) setName(product.name);
-      if (product.price !== undefined) {
-        setPrice(product.price);
-        const numPrice = Number(product.price) || 0;
-        setAdvance(numPrice > 300 ? '300' : String(numPrice));
-      }
-    } else if (activeImageType === 'color') {
-      if (imgUrl) setColorImage(imgUrl);
-      if (product.name) setColor(product.name);
-    }
-    setIsStockImagesOpen(false);
-  };
+  if (!isOpen) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const savedOrderData = {
-      ...(orderToEdit || {}),
-      id: orderToEdit ? orderToEdit.id : Date.now(),
+    onSave({
       name,
       image,
       colorImage,
@@ -240,190 +82,182 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], ord
       city,
       address,
       paymentType,
-      advance: Number(advance) || 0,
-      discount: Number(discount) || 0,
+      advance,
+      discount,
       comment,
-      price: Number(price) || 0,
-      status: orderToEdit ? orderToEdit.status : 'нове',
-      createdAt: orderToEdit ? orderToEdit.createdAt : new Date().toISOString()
-    };
-
-    if (typeof onSave === 'function') {
-      onSave(savedOrderData);
-    }
-    handleClose();
+      price
+    });
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto" onClick={handleClose}>
-      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 relative my-auto space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <h2 className="text-xl font-bold text-slate-900">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-md w-full p-5 shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-sm font-bold text-slate-900">
             {orderToEdit ? 'Редагувати замовлення' : 'Нове замовлення'}
           </h2>
-          <button type="button" onClick={handleClose} className="text-slate-400 hover:text-slate-700 cursor-pointer p-1">
-            <X size={20} />
+          <button 
+            type="button" 
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 text-xs font-semibold cursor-pointer"
+          >
+            ✕
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2.5">
-              <span className="text-xs font-semibold text-slate-700">Фото товару</span>
-              {image ? (
-                <div className="relative w-16 h-16">
-                  <img src={image} alt="Товар" className="w-16 h-16 object-cover rounded-lg border shadow-xs" />
-                  <button type="button" onClick={() => setImage('')} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 shadow-xs"><X size={12}/></button>
-                </div>
-              ) : (
-                <div className="w-16 h-16 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400"><ImageIcon size={24} /></div>
-              )}
-              <div className="flex gap-1.5 w-full justify-center">
-                <input type="file" ref={fileInputRef} onChange={(e) => handleFileUpload(e, 'product')} className="hidden" accept="image/*" />
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"><Upload size={16} /></button>
-                <button type="button" onClick={() => { setActiveImageType('product'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"><Search size={16} /></button>
-              </div>
-            </div>
-
-            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2.5">
-              <span className="text-xs font-semibold text-slate-700">Зразок кольору</span>
-              {colorImage ? (
-                <div className="relative w-16 h-16">
-                  <img src={colorImage} alt="Колір" className="w-16 h-16 object-cover rounded-lg border shadow-xs" />
-                  <button type="button" onClick={() => setColorImage('')} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 shadow-xs"><X size={12}/></button>
-                </div>
-              ) : (
-                <div className="w-16 h-16 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400"><ImageIcon size={24} /></div>
-              )}
-              <div className="flex gap-1.5 w-full justify-center">
-                <input type="file" ref={colorInputRef} onChange={(e) => handleFileUpload(e, 'color')} className="hidden" accept="image/*" />
-                <button type="button" onClick={() => colorInputRef.current?.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"><Upload size={16} /></button>
-                <button type="button" onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs"><Search size={16} /></button>
-              </div>
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-700 mb-1">Назва товару</label>
+            <input 
+              type="text" 
+              value={name} 
+              onChange={(e) => setName(e.target.value)} 
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+              placeholder="Введіть назву"
+            />
           </div>
 
-          <div className="relative space-y-1">
-            <label className="text-xs font-semibold text-slate-600">Назва товару</label>
-            <div className="relative">
-              <input type="text" value={name} onChange={(e) => { setName(e.target.value); setIsProductDropdownOpen(true); }} onFocus={() => setIsProductDropdownOpen(true)} placeholder="Назва товару" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900" required />
-              <Search className="absolute right-3 top-3 text-slate-400" size={18} />
-            </div>
-
-            {isProductDropdownOpen && filteredStockProducts.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                {filteredStockProducts.map((prod, index) => {
-                  if (!prod) return null;
-                  const prodImg = prod.image || prod.photo || prod.img || prod.colorImage;
-                  return (
-                    <div key={prod.id || index} onClick={() => handleSelectProductFromStock(prod)} className="flex items-center justify-between p-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none transition">
-                      <div className="flex items-center gap-3">
-                        {prodImg ? <img src={prodImg} alt="" className="w-9 h-9 object-cover rounded-lg border" /> : <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Фото</div>}
-                        <div className="text-xs font-bold text-slate-900">{prod.name}</div>
-                      </div>
-                      {prod.price !== undefined && <div className="text-xs font-semibold text-emerald-600">{prod.price} грн</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
-            <div className="grid grid-cols-2 gap-2">
-              <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="Розмір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-              <input type="text" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Матеріал" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-              <input type="text" value={sole} onChange={(e) => setSole(e.target.value)} placeholder="Підошва" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-              <input type="text" value={color} onChange={(e) => setColor(e.target.value)} placeholder="Колір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-            </div>
-
-            <div className="flex items-center justify-end pt-1">
-              <div className="flex gap-1.5">
-                <button type="button" onClick={() => setLining('байка')} className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition ${lining === 'байка' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>Байка</button>
-                <button type="button" onClick={() => setLining('хутро')} className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition ${lining === 'хутро' ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>Хутро</button>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-1 pt-2 border-t border-slate-100">
-            <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-              <Wand2 size={14} className="text-amber-600" /> Розумне введення даних клієнта
-            </label>
-            <textarea rows="2" value={smartText} onChange={handleSmartClientParse} placeholder="Вставте сюди весь текст від клієнта..." className="w-full px-3 py-2 bg-amber-50/40 border border-amber-200/70 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
-          </div>
-
-          <div className="space-y-2">
-            <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Ім'я клієнта (ПІБ)" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required />
-            <div className="grid grid-cols-2 gap-2">
-              <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Телефон" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Місто" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-            </div>
-            <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Відділення / Адреса" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-semibold text-slate-500">Вартість товару (грн)</label>
-              <input type="number" value={price} onChange={handlePriceChange} placeholder="0" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-emerald-700" />
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">Розмір</label>
+              <input 
+                type="text" 
+                value={size} 
+                onChange={(e) => setSize(e.target.value)} 
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+                placeholder="Напр. 38"
+              />
             </div>
             <div>
-              <div className="flex justify-between items-center">
-                <label className="text-[11px] font-semibold text-slate-500">Передплата (грн)</label>
-                <button type="button" onClick={handleFullPayment} className="text-[10px] font-bold text-amber-700 hover:underline cursor-pointer">Повна оплата</button>
-              </div>
-              <input type="number" value={advance} onChange={(e) => setAdvance(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">Ціна (грн)</label>
+              <input 
+                type="number" 
+                value={price} 
+                onChange={(e) => setPrice(e.target.value)} 
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+                placeholder="0"
+              />
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-600">Коментар до замовлення</label>
-            <textarea rows="2" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Додаткові побажання..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900" />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">Колір</label>
+              <input 
+                type="text" 
+                value={color} 
+                onChange={(e) => setColor(e.target.value)} 
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+                placeholder="Колір"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">Матеріал</label>
+              <input 
+                type="text" 
+                value={material} 
+                onChange={(e) => setMaterial(e.target.value)} 
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+                placeholder="Шкіра/замша"
+              />
+            </div>
+          </div>
+
+          <hr className="border-slate-100 my-2" />
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-700 mb-1">Ім'я клієнта</label>
+            <input 
+              type="text" 
+              value={clientName} 
+              onChange={(e) => setClientName(e.target.value)} 
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+              placeholder="ПІБ клієнта"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-700 mb-1">Телефон</label>
+            <input 
+              type="text" 
+              value={phone} 
+              onChange={(e) => setPhone(e.target.value)} 
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+              placeholder="+380..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">Місто</label>
+              <input 
+                type="text" 
+                value={city} 
+                onChange={(e) => setCity(e.target.value)} 
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+                placeholder="Місто"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">Відділення / Адреса</label>
+              <input 
+                type="text" 
+                value={address} 
+                onChange={(e) => setAddress(e.target.value)} 
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+                placeholder="№ відділення"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">Передплата</label>
+              <input 
+                type="number" 
+                value={advance} 
+                onChange={(e) => setAdvance(e.target.value)} 
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">Знижка</label>
+              <input 
+                type="number" 
+                value={discount} 
+                onChange={(e) => setDiscount(e.target.value)} 
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-700 mb-1">Коментар</label>
+            <textarea 
+              value={comment} 
+              onChange={(e) => setComment(e.target.value)} 
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-slate-900 resize-none h-16"
+              placeholder="Додаткові побажання..."
+            />
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={handleClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">Скасувати</button>
-            <button type="submit" className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer">
-              {orderToEdit ? 'Зберегти зміни' : 'Зберегти'}
+            <button 
+              type="button" 
+              onClick={onClose}
+              className="w-1/2 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-xs font-semibold hover:bg-slate-200 transition cursor-pointer"
+            >
+              Скасувати
+            </button>
+            <button 
+              type="submit" 
+              className="w-1/2 bg-slate-900 text-white py-2.5 rounded-xl text-xs font-semibold hover:bg-slate-800 transition cursor-pointer"
+            >
+              Зберегти
             </button>
           </div>
         </form>
       </div>
-
-      {isStockImagesOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4" onClick={() => setIsStockImagesOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between pb-2 border-b border-slate-150">
-              <h3 className="font-bold text-slate-900 text-sm">{activeImageType === 'color' ? 'Виберіть колір з палітри' : 'Виберіть зображення зі складу'}</h3>
-              <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
-            </div>
-            <div className="grid grid-cols-3 gap-2 overflow-y-auto p-1 max-h-96">
-              {activeStockList.length > 0 ? (
-                activeStockList.map((item, index) => {
-                  if (!item) return null;
-                  const img = item.image || item.photo || item.img || item.colorImage;
-                  return (
-                    <div key={item.id || index}>
-                      {img ? (
-                        <div onClick={() => handleSelectImageFromStock(item)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
-                          <img src={img} alt="" className="w-full h-full object-cover" />
-                          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Товар'}</div>
-                        </div>
-                      ) : (
-                        <div onClick={() => handleSelectImageFromStock(item)} className="border border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50 cursor-pointer hover:bg-slate-100">{item.name || 'Без фото'}</div>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="col-span-3 py-8 text-center text-xs text-slate-400">{activeImageType === 'color' ? 'Палітра кольорів порожня' : 'Склад порожній'}</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

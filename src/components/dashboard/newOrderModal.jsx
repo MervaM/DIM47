@@ -37,16 +37,23 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   }, [isOpen]);
 
+  // Збираємо дані зі складу з усіх можливих ключів localStorage та пропсів
   let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
   
   if (currentStock.length === 0) {
-    try {
-      const savedStock = localStorage.getItem('dim47_stock');
-      if (savedStock) {
-        const parsed = JSON.parse(savedStock);
-        if (Array.isArray(parsed)) currentStock = parsed;
-      }
-    } catch (e) {}
+    const possibleKeys = ['dim47_stock', 'dim47_shoes', 'shoes', 'stock', 'products'];
+    for (const key of possibleKeys) {
+      try {
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            currentStock = parsed;
+            break;
+          }
+        }
+      } catch (e) {}
+    }
   }
 
   const isColorOrMaterialItem = (item) => {
@@ -55,21 +62,15 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     const folder = String(item.folderId || '').toLowerCase();
     
     if (folder.includes('color') || folder.includes('palet') || folder.includes('шкір') || folder.includes('замш')) return true;
+    if (item.isColor || item.type === 'color') return true;
 
+    // Якщо це явно готовий виріб (взуття), це точно не палітра кольорів
     const isFinishedProduct = n.includes('мюлі') || n.includes('клоги') || n.includes('оксфорд') || 
                               n.includes('туфлі') || n.includes('чоботи') || n.includes('кросівк') || 
                               n.includes('босоніжк') || n.includes('мокасин');
     if (isFinishedProduct) return false;
 
-    const hasMaterialKeywords = n.includes('замш') || n.includes('шкір') || n.includes('лак') || 
-                              n.includes('нубук') || n.includes('пітона') || n.includes('рептилі');
-    const hasColorKeywords = n.includes('червон') || n.includes('чорн') || n.includes('біл') || 
-                           n.includes('беж') || n.includes('риж') || n.includes('син') || 
-                           n.includes('зелен') || n.includes('жовт') || n.includes('сір') || 
-                           n.includes('рожев') || n.includes('коричневих') || n.includes('оливк') ||
-                           n.includes('пудр') || n.includes('бордо') || n.includes('молок') || n.includes('део');
-
-    return hasMaterialKeywords || hasColorKeywords || item.isColor || item.type === 'color';
+    return false;
   };
 
   let paletteStock = currentStock.filter(isColorOrMaterialItem);
@@ -90,6 +91,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     .map(id => paletteStock.find(item => (item?.id || item?.name) === id))
     .filter(Boolean);
 
+  // Решта товарів вважається взуттям/товарами зі складу
   const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
   const activeStockList = activeImageType === 'color' ? paletteStock : shoesStock;
 
@@ -248,7 +250,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 sm:p-6 relative my-auto space-y-4 cursor-default max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <h2 className="text-xl font-bold text-slate-900">Нове замовлення</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 cursor-pointer">
@@ -257,7 +258,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          
           <div className="grid grid-cols-2 gap-3">
             <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2.5">
               <span className="text-xs font-semibold text-slate-700">Фото товару</span>
@@ -353,7 +353,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
-            
             <div className="grid grid-cols-2 gap-2">
               <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="Розмір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
               <input type="text" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Матеріал" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
@@ -400,13 +399,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             <div>
               <div className="flex justify-between items-center">
                 <label className="text-[11px] font-semibold text-slate-500">Передплата (грн)</label>
-                <button
-                  type="button"
-                  onClick={handleFullPayment}
-                  className="text-[10px] font-bold text-amber-700 hover:underline cursor-pointer"
-                >
-                  Повна оплата
-                </button>
+                <button type="button" onClick={handleFullPayment} className="text-[10px] font-bold text-amber-700 hover:underline cursor-pointer">Повна оплата</button>
               </div>
               <input type="number" value={advance} onChange={(e) => setAdvance(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             </div>
@@ -455,7 +448,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                       {img ? (
                         <div onClick={() => handleSelectImageFromStock(item)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
                           <img src={img} alt="" className="w-full h-full object-cover" />
-                          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Колір'}</div>
+                          <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center">{item.name || 'Товар'}</div>
                         </div>
                       ) : (
                         <div onClick={() => handleSelectImageFromStock(item)} className="border border-dashed border-slate-200 rounded-lg aspect-square flex items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50 cursor-pointer hover:bg-slate-100">

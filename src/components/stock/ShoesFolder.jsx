@@ -65,14 +65,16 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     }
   };
 
-  const handleSave = (e) => {
-    e.preventDefault();
-    console.log("--> handleSave викликано! Назва моделі:", formName);
+  const handleSave = () => {
+    if (!formName.trim()) {
+      alert("Введіть назву моделі!");
+      return;
+    }
 
     const newItem = {
-      id: editingItem ? editingItem.id : Date.now(),
+      id: editingItem ? String(editingItem.id) : String(Date.now()),
       folderId: 'shoes',
-      name: formName || 'Модель взуття',
+      name: formName,
       season: formSeason,
       size: formSize,
       color: formColor,
@@ -86,12 +88,11 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
       status: 'зразок'
     };
 
-    console.log("--> Викликаємо onAddItem з об'єктом:", newItem);
     onAddItem(newItem);
     setShowModal(false);
   };
 
-  // Оновлений фільтр для папки взуття
+  // Фільтр для папки взуття
   const shoesList = stock.filter(item => {
     if (item.folderId === 'shoes') return true;
     if (!item.folderId) {
@@ -213,10 +214,18 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
               </h2>
               <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={20}/></button>
             </div>
-            <form onSubmit={handleSave} className="flex flex-col gap-3">
+            
+            <div className="flex flex-col gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Назва моделі</label>
-                <input type="text" value={formName} onChange={e => setFormName(e.target.value)} required className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. Черевики 01" />
+                <input 
+                  type="text" 
+                  value={formName} 
+                  onChange={e => setFormName(e.target.value)} 
+                  required 
+                  className="w-full px-3 py-2 border rounded-xl text-xs" 
+                  placeholder="Напр. Черевики 01" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Сезон</label>
@@ -292,11 +301,24 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                 <label className="block text-xs font-medium text-slate-500 mb-1">Фото моделі</label>
                 <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs" />
               </div>
+
               <div className="flex justify-end gap-2 pt-3 border-t">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 cursor-pointer">Скасувати</button>
-                <button type="submit" className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold cursor-pointer">Зберегти</button>
+                <button 
+                  type="button" 
+                  onClick={() => setShowModal(false)} 
+                  className="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 cursor-pointer"
+                >
+                  Скасувати
+                </button>
+                <button 
+                  type="button" 
+                  onClick={handleSave} 
+                  className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Зберегти
+                </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

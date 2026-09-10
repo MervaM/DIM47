@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit3, X, Search } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../../js/firebase'; // Виправлено шлях до твого firebase відповідно до App.jsx
+import { db } from '../../js/firebase';
 
 export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDetails }) {
   const [showModal, setShowModal] = useState(false);
@@ -104,6 +104,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
 
     const itemId = editingItem ? String(editingItem.id) : String(Date.now());
 
+    // Завжди жорстко прописуємо folderId: 'shoes', щоб унеможливити втрату при фільтрації
     const newItem = {
       id: itemId,
       folderId: 'shoes',
@@ -134,8 +135,8 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     }
   };
 
-  // Виправлено фільтрацію: тепер показує елементи, де folderId це 'shoes' або якщо поле взагалі не задане (щоб старі записи теж з'явилися)
-  const shoesList = stock.filter(item => item.folderId === 'shoes' || !item.folderId);
+  // Показуємо всі записи, які належать до взуття або не мають мітки (щоб старі дані теж витягнулись)
+  const shoesList = stock.filter(item => item.folderId === 'shoes' || !item.folderId || item.folderId === 'Взуття');
 
   const filteredShoes = shoesList.filter(item => {
     const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||

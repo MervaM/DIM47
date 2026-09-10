@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from './js/firebase'; // Перевірте, чи шлях точно збігається з розташуванням вашого файлу
+import { db } from './js/firebase';
 import Header from './components/header/header';
 import Dashboard from './components/dashboard/dashboard';
 import Orders from './components/orders/orders';
@@ -34,7 +34,7 @@ export default function App() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [finReportPeriod, setFinReportPeriod] = useState('month');
 
-  // Підписка на оновлення з Firebase в реальному часі для складу та замовлень
+  // Підписка на оновлення з Firebase в реальному часі
   useEffect(() => {
     const unsubscribeStock = onSnapshot(collection(db, 'stock'), (snapshot) => {
       const items = snapshot.docs.map(docSnapshot => ({
@@ -62,7 +62,6 @@ export default function App() {
     };
   }, []);
 
-  // Універсальна функція додавання/редагування товару в Firestore
   const handleAddItem = async (newItem) => {
     try {
       const itemId = String(newItem.id || Date.now());
@@ -82,7 +81,6 @@ export default function App() {
     }
   };
 
-  // Функція видалення товару з Firestore
   const handleDeleteItem = async (itemId) => {
     try {
       await deleteDoc(doc(db, 'stock', String(itemId)));

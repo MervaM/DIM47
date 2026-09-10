@@ -17,6 +17,7 @@ export default function App() {
   const [folders, setFolders] = useState([
     { id: 'shoes', name: 'Взуття', type: 'root', icon: '🥿' },
     { id: 'boxes', name: 'Коробки', type: 'root', icon: '📦' },
+    { id: 'palette', name: 'Палітра', type: 'root', icon: '🎨' },
     { 
       id: 'fabrics', 
       name: 'Зразки тканин', 

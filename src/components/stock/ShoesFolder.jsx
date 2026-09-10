@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit3, X, Search } from 'lucide-react';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../firebaseConfig'; // Перевірте шлях до вашого файлу конфігурації firebase
 
 export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDetails }) {
   const [showModal, setShowModal] = useState(false);
@@ -94,7 +96,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim()) {
       alert("Введіть назву моделі!");
       return;
@@ -119,8 +121,18 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
       status: 'зразок'
     };
 
-    onAddItem(newItem);
-    setShowModal(false);
+    try {
+      // Зберігаємо безпосередньо у Firestore у колекцію "stock" під унікальним ID
+      const docRef = doc(db, 'stock', itemId);
+      await setDoc(docRef, newItem, { merge: true });
+      
+      // Оновлюємо локальний стейт після успішного запису в базу
+      onAddItem(newItem);
+      setShowModal(false);
+    } catch (error) {
+      console.error("Помилка збереження у Firebase:", error);
+      alert("Не вдалося зберегти дані у базу даних. Перевірте консоль.");
+    }
   };
 
   const shoesList = stock.filter(item => item.folderId === 'shoes');

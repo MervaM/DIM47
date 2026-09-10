@@ -6,7 +6,7 @@ import PalettesFolder from './PalettesFolder';
 import DustbagsFolder from './DustbagsFolder';
 import AvailabilityFolder from './AvailabilityFolder';
 
-export default function Stock({ stock, setStock }) {
+export default function Stock({ stock, setStock, onAddItem, onDeleteItem }) {
   const [activeFolder, setActiveFolder] = useState(() => {
     return localStorage.getItem('activeFolder') || null;
   });
@@ -29,18 +29,26 @@ export default function Stock({ stock, setStock }) {
     { id: 'availability', name: 'Наявність' },
   ];
 
-  const handleAddItem = (newItem) => {
-    setStock(prev => {
-      const exists = prev.some(item => item.id === newItem.id);
-      if (exists) {
-        return prev.map(item => item.id === newItem.id ? newItem : item);
-      }
-      return [newItem, ...prev];
-    });
+  const handleAddItemWrapper = (newItem) => {
+    if (onAddItem) {
+      onAddItem(newItem);
+    } else {
+      setStock(prev => {
+        const exists = prev.some(item => item.id === newItem.id);
+        if (exists) {
+          return prev.map(item => item.id === newItem.id ? newItem : item);
+        }
+        return [newItem, ...prev];
+      });
+    }
   };
 
-  const handleDeleteItem = (id) => {
-    setStock(prev => prev.filter(item => item.id !== id));
+  const handleDeleteItemWrapper = (id) => {
+    if (onDeleteItem) {
+      onDeleteItem(id);
+    } else {
+      setStock(prev => prev.filter(item => item.id !== id));
+    }
     setSelectedItemDetails(null);
   };
 
@@ -88,7 +96,6 @@ export default function Stock({ stock, setStock }) {
           <div className="border-t border-slate-100 pt-6 space-y-6">
             <h3 className="text-lg font-bold text-slate-900">Загальний перегляд складу</h3>
             
-            {/* Коробки та Пильовики в єдиному списку без підписів */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {boxesList.map(item => (
                 <div 
@@ -157,11 +164,11 @@ export default function Stock({ stock, setStock }) {
             </span>
           </div>
 
-          {activeFolder === 'shoes' && <ShoesFolder stock={stock} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} onSelectDetails={setSelectedItemDetails} />}
-          {activeFolder === 'boxes' && <BoxesFolder stock={stock} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} />}
-          {activeFolder === 'palettes' && <PalettesFolder stock={stock} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} />}
-          {activeFolder === 'dustbags' && <DustbagsFolder stock={stock} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} />}
-          {activeFolder === 'availability' && <AvailabilityFolder stock={stock} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} onSelectDetails={setSelectedItemDetails} />}
+          {activeFolder === 'shoes' && <ShoesFolder stock={stock} onAddItem={handleAddItemWrapper} onDeleteItem={handleDeleteItemWrapper} onSelectDetails={setSelectedItemDetails} />}
+          {activeFolder === 'boxes' && <BoxesFolder stock={stock} onAddItem={handleAddItemWrapper} onDeleteItem={handleDeleteItemWrapper} />}
+          {activeFolder === 'palettes' && <PalettesFolder stock={stock} onAddItem={handleAddItemWrapper} onDeleteItem={handleDeleteItemWrapper} />}
+          {activeFolder === 'dustbags' && <DustbagsFolder stock={stock} onAddItem={handleAddItemWrapper} onDeleteItem={handleDeleteItemWrapper} />}
+          {activeFolder === 'availability' && <AvailabilityFolder stock={stock} onAddItem={handleAddItemWrapper} onDeleteItem={handleDeleteItemWrapper} onSelectDetails={setSelectedItemDetails} />}
         </div>
       )}
 

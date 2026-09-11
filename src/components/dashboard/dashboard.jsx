@@ -213,14 +213,38 @@ export default function Dashboard() {
     }
   };
 
+  // Видалення замовлення та повернення товару в "Наявність", якщо статус було "З наявності"
   const handleDeleteOrder = async (id) => {
     if (!window.confirm('Ви впевнені, що хочете видалити це замовлення?')) return;
 
     try {
-      await deleteDoc(doc(db, "orders", id));
-      setOrders(orders.filter(o => o.id !== id));
+      const orderToDelete = orders.find(o => o.id === id);
+
+      if (orderToDelete) {
+        // Якщо картка мала статус "З наявності" або збережений stockItemId
+        if (orderToDelete.status === 'З наявності' || orderToDelete.stockItemId) {
+          await addDoc(collection(db, "stock"), {
+            folderId: 'availability',
+            name: orderToDelete.productTitle || orderToDelete.name || 'Товар з наявності',
+            size: orderToDelete.size || '',
+            color: orderToDelete.colorText || orderToDelete.color || '',
+            material: orderToDelete.material || '',
+            sole: orderToDelete.sole || '',
+            lining: orderToDelete.filling || orderToDelete.lining || '',
+            price: Number(orderToDelete.price) || 0,
+            status: 'відмова',
+            image: orderToDelete.image || orderToDelete.productImage || '',
+            createdAt: new Date().toISOString()
+          });
+
+          await fetchStockProducts();
+        }
+
+        await deleteDoc(doc(db, "orders", id));
+        setOrders(prevOrders => prevOrders.filter(o => o.id !== id));
+      }
     } catch (error) {
-      console.error('Помилка видалення:', error);
+      console.error('Помилка видалення замовлення:', error);
       alert('Не вдалося видалити замовлення');
     }
   };

@@ -72,22 +72,31 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }, 0);
   };
 
-  // 1. Транзакції пошиття та закупки взуття (включаючи "З наявності")
+  // 1. Пошиття/закупка з індивідуальних замовлень
   const orderTailoringCostTx = orders
-    .map(o => {
-      // Підтягуємо вартість закупки з будь-якого доступного поля себевартості
-      const purchaseCost = Number(o.cost) || Number(o.purchasePrice) || Number(o.priceCost) || Number(o.purchase_price) || 0;
-      return {
-        id: `ord-cost-${o.id}`,
-        date: o.date || 'Замовлення',
-        type: 'Витрата',
-        category: 'Пошиття взуття',
-        comment: `${o.productTitle || o.title || o.name || 'Взуття'}${o.status === 'З наявності' ? ' (Наявність)' : ''}`,
-        amount: purchaseCost,
-        isAuto: true
-      };
-    })
+    .map(o => ({
+      id: `ord-cost-${o.id}`,
+      date: o.date || 'Замовлення',
+      type: 'Витрата',
+      category: 'Пошиття взуття',
+      comment: o.productTitle || o.name || 'Взуття',
+      amount: Number(o.cost) || 0,
+      isAuto: true
+    }))
     .filter(t => t.amount > 0 || t.comment);
+
+  // 2. Закупка товарів із папки "Наявність" (folderId === 'availability')
+  const availabilityShoesCostTx = stock
+    .filter(item => item.folderId === 'availability' && Number(item.cost) > 0)
+    .map(item => ({
+      id: `avail-cost-${item.id}`,
+      date: item.date || item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : 'Наявність',
+      type: 'Витрата',
+      category: 'Пошиття взуття',
+      comment: `${item.name || 'Взуття'} (Наявність${item.size ? `, ${item.size} р.` : ''})`,
+      amount: Number(item.cost) || 0,
+      isAuto: true
+    }));
 
   const successfulOrdersTx = orders
     .filter(o => (o.status || '').toLowerCase() === 'успішно')
@@ -101,7 +110,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         date: o.date || 'Замовлення',
         type: 'Дохід',
         category: 'Успішно',
-        comment: `Залишок після передплати: ${o.productTitle || o.title || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
+        comment: `Залишок після передплати: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
         amount: finalPayment,
         isAuto: true
       };
@@ -114,15 +123,16 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       date: o.date || 'Замовлення',
       type: 'Дохід',
       category: 'Передплата',
-      comment: `Передплата: ${o.productTitle || o.title || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
+      comment: `Передплата: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
       amount: Number(o.advance) || Number(o.prepayment) || 0,
       isAuto: true
     }));
 
+  // Пакування (коробки та пильовики)
   const stockTx = stock
     .filter(item => {
       const name = (item.name || '').toLowerCase();
-      return name.includes('коробк') || name.includes('пильовик');
+      return item.folderId !== 'availability' && (name.includes('коробк') || name.includes('пильовик'));
     })
     .map(item => {
       const name = (item.name || '').toLowerCase();
@@ -147,13 +157,14 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
 
   const allTransactions = [
     ...orderTailoringCostTx, 
+    ...availabilityShoesCostTx,
     ...successfulOrdersTx, 
     ...ordersAdvanceTx, 
     ...stockTx, 
     ...finances
   ];
 
-  // 2. Аналітика інвесторів
+  // Аналітика інвесторів
   const getInvestorsAnalytics = () => {
     const investorMap = {};
 
@@ -266,8 +277,12 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
 
       if (String(tx.id).startsWith('ord-cost-')) {
         const orderId = tx.id.replace('ord-cost-', '');
-        await updateDoc(doc(db, 'orders', orderId), { cost: newAmount, purchasePrice: newAmount });
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, cost: newAmount, purchasePrice: newAmount } : o));
+        await updateDoc(doc(db, 'orders', orderId), { cost: newAmount });
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, cost: newAmount } : o));
+      } else if (String(tx.id).startsWith('avail-cost-')) {
+        const itemId = tx.id.replace('avail-cost-', '');
+        await updateDoc(doc(db, 'stock', itemId), { cost: newAmount });
+        setStock(prev => prev.map(s => s.id === itemId ? { ...s, cost: newAmount } : s));
       } else if (String(tx.id).startsWith('ord-rev-')) {
         const orderId = tx.id.replace('ord-rev-', '');
         await updateDoc(doc(db, 'orders', orderId), { price: newAmount });
@@ -291,7 +306,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
   const handleDeleteTransaction = async (id) => {
     if (window.confirm('Видалити цю транзакцію?')) {
       try {
-        if (!String(id).startsWith('stock-') && !String(id).startsWith('ord-')) {
+        if (!String(id).startsWith('stock-') && !String(id).startsWith('ord-') && !String(id).startsWith('avail-')) {
           await deleteDoc(doc(db, 'transactions', id));
         }
         setFinances(finances.filter(tx => tx.id !== id));
@@ -301,11 +316,9 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }
   };
 
-  const getCategoryDetails = (catKey) => {
-    return allTransactions.filter(t => (t.category || '').toLowerCase().includes(catKey.toLowerCase()));
-  };
-
-  const categoryDetailsList = selectedCategoryAnalytics ? getCategoryDetails(selectedCategoryAnalytics) : [];
+  const categoryDetailsList = selectedCategoryAnalytics 
+    ? allTransactions.filter(t => (t.category || '').toLowerCase().includes(selectedCategoryAnalytics.toLowerCase()))
+    : [];
 
   return (
     <div className="space-y-4 p-3 sm:p-4 max-w-4xl mx-auto">
@@ -320,7 +333,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </button>
       </div>
 
-      {/* Основні картки фінансів + Картка Інвестиції */}
+      {/* Основні картки фінансів */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
           <div className="flex justify-between items-center text-slate-500 text-xs font-medium">
@@ -337,7 +350,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg"><TrendingDown size={16} /></span>
           </div>
           <div className="text-xl font-bold text-slate-900">{totalExpense.toLocaleString('uk-UA')} грн</div>
-          <p className="text-[10px] text-slate-400">Пошиття + податки + реклама тощо</p>
+          <p className="text-[10px] text-slate-400">Пошиття + наявність + податки тощо</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
@@ -637,7 +650,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       )}
 
-      {/* МОДАЛЬНЕ ВІКНО ДЕТАЛЕЙ КАТЕГОРІЇ (БЕЗ ГРАФІКА ДИНАМІКИ) */}
+      {/* МОДАЛЬНЕ ВІКНО ДЕТАЛЕЙ КАТЕГОРІЇ */}
       {selectedCategoryAnalytics && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"

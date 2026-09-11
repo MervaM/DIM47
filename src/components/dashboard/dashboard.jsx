@@ -19,8 +19,8 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
 
-  // Список статусів із доданим статусом "Повернення"
-  const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Успішно', 'Відмова', 'Повернення'];
+  // Класичні статуси без додаткової вкладки Повернення
+  const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Успішно', 'Відмова'];
 
   useEffect(() => {
     fetchOrders();
@@ -46,7 +46,7 @@ export default function Dashboard() {
   };
 
   const sortOrdersList = (ordersArray) => {
-    const isCompleted = (status) => status === 'Доставка' || status === 'Успішно' || status === 'Відмова' || status === 'Повернення';
+    const isCompleted = (status) => status === 'Доставка' || status === 'Успішно' || status === 'Відмова';
 
     return [...ordersArray].sort((a, b) => {
       const compA = isCompleted(a.status);
@@ -182,8 +182,8 @@ export default function Dashboard() {
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
 
-      // Якщо замовлення створюється з товару "Наявності" — видаляємо його зі "stock"
-      if (orderData.stockItemId && orderData.folderId === 'availability') {
+      // Якщо замовлення створюється з товару з папки Наявність (availability) — видаляємо його зі складу
+      if (orderData.stockItemId) {
         await deleteDoc(doc(db, "stock", orderData.stockItemId));
         await fetchStockProducts();
       }
@@ -222,6 +222,7 @@ export default function Dashboard() {
     }
   };
 
+  // Зміна статусу: при статусі "Відмова" створюємо товар у папці "Наявність"
   const handleStatusChange = async (id, newStatus) => {
     try {
       const orderRef = doc(db, "orders", id);
@@ -229,11 +230,10 @@ export default function Dashboard() {
 
       await updateDoc(orderRef, { status: newStatus });
 
-      // При виборі статусу "Повернення" товар переноситься назад в "availability"
-      if (newStatus === 'Повернення' && targetOrder) {
+      if (newStatus === 'Відмова' && targetOrder) {
         await addDoc(collection(db, "stock"), {
           folderId: 'availability',
-          name: targetOrder.productTitle || targetOrder.name || 'Товар з повернення',
+          name: targetOrder.productTitle || targetOrder.name || 'Товар з відмови',
           size: targetOrder.size || '',
           color: targetOrder.colorText || targetOrder.color || '',
           material: targetOrder.material || '',
@@ -272,8 +272,7 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Скролювальна панель статусів */}
-      <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-2 mb-3 max-w-full touch-pan-x scrollbar-thin">
+      <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-2 mb-3 max-w-full touch-pan-x scrollbar-none">
         {statuses.map((status) => {
           const count = status === 'Всі' ? orders.length : orders.filter(o => o.status === status).length;
           const isActive = activeFilter === status;

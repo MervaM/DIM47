@@ -12,7 +12,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [color, setColor] = useState('');
   const [lining, setLining] = useState('');
   
-  // Стейт для збереження характеристик-підказок (placeholders)
   const [placeholders, setPlaceholders] = useState({
     size: '',
     material: '',
@@ -37,7 +36,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [isStockImagesOpen, setIsStockImagesOpen] = useState(false);
   const [activeImageType, setActiveImageType] = useState(null);
   
-  const [stockFolderFilter, setStockFolderFilter] = useState('all');
+  // За замовчуванням фільтр встановлено на 'shoes' (Взуття)
+  const [stockFolderFilter, setStockFolderFilter] = useState('shoes');
 
   const fileInputRef = useRef(null);
   const colorInputRef = useRef(null);
@@ -46,6 +46,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (isOpen) {
       setAdvance('300');
       setSelectedStockItemId(null);
+      setStockFolderFilter('shoes');
       setPlaceholders({ size: '', material: '', sole: '', color: '' });
     }
   }, [isOpen]);
@@ -57,22 +58,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   };
 
   let currentStock = Array.isArray(stock) && stock.length > 0 ? [...stock] : [];
-  
-  if (currentStock.length === 0) {
-    const possibleKeys = ['dim47_stock', 'dim47_shoes', 'shoes', 'stock', 'products'];
-    for (const key of possibleKeys) {
-      try {
-        const saved = localStorage.getItem(key);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            currentStock = parsed;
-            break;
-          }
-        }
-      } catch (e) {}
-    }
-  }
 
   const isColorOrMaterialItem = (item) => {
     if (!item) return false;
@@ -85,20 +70,15 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   let paletteStock = currentStock.filter(isColorOrMaterialItem);
   const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
 
+  // Сувора фільтрація між взуттям та наявністю
   const getFilteredStockList = () => {
     if (activeImageType === 'color') return paletteStock;
 
-    if (stockFolderFilter === 'shoes') {
-      return shoesStock.filter(item => item.folderId === 'shoes' || !item.folderId);
-    }
     if (stockFolderFilter === 'availability') {
-      return shoesStock.filter(item => 
-        item.folderId === 'availability' || 
-        item.status === 'відмова' || 
-        item.status === 'зразок'
-      );
+      return shoesStock.filter(item => item.folderId === 'availability');
     }
-    return shoesStock;
+    // Вкладинка 'shoes' (Взуття) за замовчуванням
+    return shoesStock.filter(item => item.folderId === 'shoes' || !item.folderId);
   };
 
   const activeStockList = getFilteredStockList();
@@ -165,7 +145,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setAdvance(price);
   };
 
-  // Вибір зі спадного списку (dropdown)
   const handleSelectProductFromStock = (product) => {
     if (!product) return;
     setName(product.name || '');
@@ -178,10 +157,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setAdvance(numPrice > 300 ? '300' : String(numPrice));
     }
 
-    const isAvailability = product.folderId === 'availability' || product.status === 'відмова';
+    const isAvailability = product.folderId === 'availability';
 
     if (isAvailability) {
-      // Наявність -> заповнюємо конкретними даними
       setSize(product.size || '');
       setMaterial(product.material || '');
       setSole(product.sole || '');
@@ -189,7 +167,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setSelectedStockItemId(product.id);
       setPlaceholders({ size: '', material: '', sole: '', color: '' });
     } else {
-      // Зразок -> ставимо лише підказки (placeholders)
       setSize('');
       setMaterial('');
       setSole('');
@@ -218,7 +195,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   };
 
-  // Вибір з галереї склада
   const handleSelectImageFromStock = (product) => {
     if (!product) return;
     const imgUrl = product.image || product.photo || product.img || product.colorImage;
@@ -233,7 +209,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         setAdvance(numPrice > 300 ? '300' : String(numPrice));
       }
 
-      const isAvailability = product.folderId === 'availability' || product.status === 'відмова';
+      const isAvailability = product.folderId === 'availability';
 
       if (isAvailability) {
         setSize(product.size || '');
@@ -407,7 +383,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                         <div>
                           <div className="text-xs font-bold text-slate-900">{prod.name}</div>
                           {prod.folderId === 'availability' && (
-                            <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded">В наявності</span>
+                            <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded">В наявності ({prod.size || '—'} розм., {prod.color || ''})</span>
                           )}
                         </div>
                       </div>
@@ -419,7 +395,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
-          {/* Блок характеристик із підказками (placeholders) */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
             <div className="grid grid-cols-2 gap-2">
@@ -516,6 +491,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         </form>
       </div>
 
+      {/* МОДАЛКА ВИБОРУ ЗОБРАЖЕННЯ ЗІ СКЛАДУ */}
       {isStockImagesOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4"
@@ -532,15 +508,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
 
+            {/* Тільки дві вкладки: Взуття та Наявність */}
             {activeImageType !== 'color' && (
               <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
-                <button
-                  type="button"
-                  onClick={() => setStockFolderFilter('all')}
-                  className={`flex-1 py-1.5 text-center font-semibold rounded-lg transition cursor-pointer ${stockFolderFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
-                >
-                  Всі
-                </button>
                 <button
                   type="button"
                   onClick={() => setStockFolderFilter('shoes')}
@@ -563,6 +533,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                 activeStockList.map((item, index) => {
                   if (!item) return null;
                   const img = item.image || item.photo || item.img || item.colorImage;
+                  const isAvailability = stockFolderFilter === 'availability';
 
                   return (
                     <div key={item.id || index}>
@@ -570,14 +541,23 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                         <div onClick={() => handleSelectImageFromStock(item)} className="relative group cursor-pointer border rounded-lg overflow-hidden aspect-square bg-slate-50 hover:ring-2 hover:ring-slate-900 transition">
                           <img src={img} alt="" className="w-full h-full object-cover" />
                           <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center flex flex-col justify-center">
-                            <span className="truncate">{item.name || 'Товар'}</span>
-                            {item.size && <span className="text-[8px] text-amber-300 font-bold">{item.size} розм.</span>}
+                            <span className="truncate font-semibold">{item.name || 'Товар'}</span>
+                            {/* На вкладці "Наявність" показуємо розмір і колір */}
+                            {isAvailability && (
+                              <span className="text-[8px] text-amber-300 font-bold truncate">
+                                {item.size ? `${item.size} розм.` : ''} {item.color || ''}
+                              </span>
+                            )}
                           </div>
                         </div>
                       ) : (
                         <div onClick={() => handleSelectImageFromStock(item)} className="border border-dashed border-slate-200 rounded-lg aspect-square flex flex-col items-center justify-center p-1 text-center text-[10px] text-slate-400 bg-slate-50 cursor-pointer hover:bg-slate-100">
                           <span className="font-bold text-slate-700 truncate w-full">{item.name || 'Без фото'}</span>
-                          {item.size && <span className="text-[8px] text-amber-600 font-bold mt-1">{item.size} розм.</span>}
+                          {isAvailability && (
+                            <span className="text-[8px] text-amber-600 font-bold mt-0.5 truncate">
+                              {item.size ? `${item.size} розм.` : ''} {item.color || ''}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>

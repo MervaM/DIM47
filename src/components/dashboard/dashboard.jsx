@@ -26,7 +26,6 @@ export default function Dashboard() {
     fetchStockProducts();
   }, []);
 
-  // Функція для завантаження складу з колекції "stock" у Firebase
   const fetchStockProducts = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, "stock"));
@@ -36,7 +35,7 @@ export default function Dashboard() {
         items.push({ 
           id: docSnap.id, 
           ...data,
-          price: data.price !== undefined ? data.price : data.cost // Підтягуємо ціну з поля cost, якщо price немає
+          price: data.price !== undefined ? data.price : data.cost
         });
       });
       setStockProducts(items);
@@ -92,6 +91,7 @@ export default function Dashboard() {
           phone: item.clientPhone || item.phone || '',
           city: item.city || '',
           warehouse: item.warehouse || '',
+          ttn: item.ttn || '',
           advance: item.advance !== undefined ? item.advance : 0,
           discount: item.discount || '',
           payment: item.paymentType || item.payment || '',
@@ -124,9 +124,36 @@ export default function Dashboard() {
     setShowNewOrderModal(true);
   };
 
-  const handleEditOrder = (order) => {
+  const handleEditOrderModal = (order) => {
     setEditingId(order.id);
     setShowNewOrderModal(true);
+  };
+
+  // Швидке збереження змін прямо з картки (ПІБ, телефон, ТТН, ціна тощо)
+  const handleInlineSaveOrder = async (updatedOrder) => {
+    try {
+      const orderRef = doc(db, "orders", updatedOrder.id);
+      
+      const updateData = {
+        clientName: updatedOrder.client || updatedOrder.clientName || '',
+        clientPhone: updatedOrder.phone || updatedOrder.clientPhone || '',
+        city: updatedOrder.city || '',
+        warehouse: updatedOrder.warehouse || '',
+        ttn: updatedOrder.ttn || '',
+        price: Number(updatedOrder.price) || 0,
+        advance: Number(updatedOrder.advance) || 0,
+      };
+
+      await updateDoc(orderRef, updateData);
+
+      setOrders(prevOrders => {
+        const updatedList = prevOrders.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder, ...updateData } : o);
+        return sortOrdersList(updatedList);
+      });
+    } catch (error) {
+      console.error('Помилка оновлення картки:', error);
+      alert('Не вдалося зберегти зміни');
+    }
   };
 
   const handleSaveOrder = async (orderData) => {
@@ -136,6 +163,7 @@ export default function Dashboard() {
         clientPhone: orderData.phone || '—',
         city: orderData.city || '—',
         warehouse: orderData.address || '—',
+        ttn: orderData.ttn || '',
         advance: Number(orderData.advance) || 0,
         discount: Number(orderData.discount) || 0,
         paymentType: orderData.paymentType || 'Передплата',
@@ -249,7 +277,8 @@ export default function Dashboard() {
       ) : (
         <DashboardCards 
           orders={filteredOrders} 
-          onEdit={handleEditOrder} 
+          onEditModal={handleEditOrderModal}
+          onInlineSave={handleInlineSaveOrder}
           onDelete={handleDeleteOrder} 
           onStatusChange={handleStatusChange} 
         />

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 
-export default function DashboardCards({ orders = [], onEdit, onDelete, onStatusChange }) {
+export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [copiedId, setCopiedId] = useState(null);
   const [copiedTtnId, setCopiedTtnId] = useState(null);
-  
-  // Стан для редагування конкретної картки за її ID
+
+  // Стан режиму редагування картки
   const [editingCardId, setEditingCardId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
@@ -31,7 +31,7 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
     setTimeout(() => setCopiedTtnId(null), 2000);
   };
 
-  const startInlineEdit = (order, e) => {
+  const handleStartInlineEdit = (order, e) => {
     e.stopPropagation();
     setEditingCardId(order.id);
     setEditForm({
@@ -40,15 +40,16 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
       city: order.city || '',
       warehouse: order.warehouse || '',
       ttn: order.ttn || '',
-      price: order.price || '',
-      advance: order.advance || ''
+      price: order.price || 0,
+      advance: order.advance || 0
     });
   };
 
-  const handleSaveInlineEdit = (orderId) => {
-    if (onEdit) {
-      onEdit({
-        ...orders.find(o => o.id === orderId),
+  const handleSaveInline = (orderId) => {
+    const originalOrder = orders.find(o => o.id === orderId);
+    if (onInlineSave && originalOrder) {
+      onInlineSave({
+        ...originalOrder,
         client: editForm.client,
         clientName: editForm.client,
         phone: editForm.phone,
@@ -75,9 +76,11 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
     <div className="space-y-4 pb-10">
       {orders.map((order) => {
         const isEditing = editingCardId === order.id;
+
         const priceNum = Number(isEditing ? editForm.price : order.price) || 0;
         const advanceNum = Number(isEditing ? editForm.advance : order.advance) || 0;
         const remaining = priceNum - advanceNum;
+        
         const isCopied = copiedId === order.id;
         const isTtnCopied = copiedTtnId === order.id;
 
@@ -101,7 +104,7 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
         return (
           <div key={order.id} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden p-3 space-y-2.5">
             
-            {/* Статус зліва, Редагування/Видалення справа */}
+            {/* Статус зліва, Кнопки дій справа */}
             <div className="flex justify-between items-center px-0.5">
               <select 
                 value={order.status || 'Нове'}
@@ -117,35 +120,46 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
 
               <div className="flex gap-1">
                 {isEditing ? (
-                  <button 
-                    type="button"
-                    onClick={() => handleSaveInlineEdit(order.id)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition cursor-pointer"
-                  >
-                    ✓ Зберегти
-                  </button>
+                  <>
+                    <button 
+                      type="button"
+                      onClick={() => handleSaveInline(order.id)}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition cursor-pointer"
+                    >
+                      ✓ Зберегти
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setEditingCardId(null)}
+                      className="px-2 py-1 rounded-lg text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </>
                 ) : (
-                  <button 
-                    type="button"
-                    onClick={(e) => startInlineEdit(order, e)}
-                    className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
-                    title="Редагувати картку"
-                  >
-                    ✏️
-                  </button>
+                  <>
+                    <button 
+                      type="button"
+                      onClick={(e) => handleStartInlineEdit(order, e)}
+                      className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                      title="Швидке редагування"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => onDelete && onDelete(order.id)}
+                      className="px-2 py-1 rounded-lg text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 transition cursor-pointer"
+                      title="Видалити"
+                    >
+                      🗑️
+                    </button>
+                  </>
                 )}
-                <button 
-                  type="button"
-                  onClick={() => onDelete && onDelete(order.id)}
-                  className="px-2 py-1 rounded-lg text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 transition cursor-pointer"
-                  title="Видалити"
-                >
-                  🗑️
-                </button>
               </div>
             </div>
 
-            {/* ВЕЛИКЕ ФОТО (h-72) + ЗБІЛЬШЕНА СМУЖКА КОЛЬОРУ (h-20) */}
+            {/* ВЕЛИКЕ ФОТО + СМУЖКА КОЛЬОРУ */}
             {productImage ? (
               <div className="space-y-1.5 -mx-3">
                 <div className="w-full h-72 bg-slate-50 border-y border-slate-100 overflow-hidden flex items-center justify-center">
@@ -176,16 +190,16 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
               )}
             </div>
 
-            {/* ДАНІ ПОКУПЦЯ (Зі статусом редагування) */}
+            {/* ДАНІ ПОКУПЦЯ (Звичайний вигляд / Режим редагування) */}
             {isEditing ? (
-              <div className="p-2.5 bg-amber-50/50 border border-amber-200 rounded-xl space-y-2 text-xs">
+              <div className="p-2.5 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-2 text-xs">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase">ПІБ Клієнта</label>
                   <input 
                     type="text"
                     value={editForm.client}
                     onChange={(e) => setEditForm({ ...editForm, client: e.target.value })}
-                    className="w-full p-1.5 bg-white border border-slate-300 rounded-lg outline-none text-slate-900 font-semibold"
+                    className="w-full p-1.5 bg-white border border-slate-300 rounded-lg outline-none text-slate-900 font-bold"
                   />
                 </div>
                 <div>
@@ -208,7 +222,7 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Відділення</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Відділення / Адреса</label>
                     <input 
                       type="text"
                       value={editForm.warehouse}
@@ -261,55 +275,78 @@ export default function DashboardCards({ orders = [], onEdit, onDelete, onStatus
                 </div>
               ) : (
                 <div 
-                  onClick={(e) => handleCopyTtn(order.ttn, order.id, e)}
                   className={`py-1.5 px-3 border rounded-xl flex items-center justify-between transition ${
                     order.ttn 
-                      ? 'bg-amber-50/60 border-amber-200/80 cursor-pointer hover:bg-amber-100/50' 
-                      : 'bg-slate-50 border-dashed border-slate-200'
+                      ? 'bg-amber-50/60 border-amber-200/80' 
+                      : 'bg-slate-50 border-dashed border-slate-300'
                   }`}
-                  title={order.ttn ? "Натисніть, щоб скопіювати ТТН" : "ТТН не додано"}
                 >
                   <span className="text-xs font-bold text-slate-500">ТТН:</span>
-                  <span className="text-xs font-bold font-mono text-slate-900">
-                    {order.ttn || '—'}
-                  </span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded transition ${
-                    isTtnCopied ? 'bg-emerald-600 text-white' : 'text-slate-400'
-                  }`}>
-                    {isTtnCopied ? '✓' : (order.ttn ? '📋' : '')}
-                  </span>
+                  
+                  {order.ttn ? (
+                    <div className="flex items-center gap-2">
+                      <span 
+                        onClick={(e) => handleCopyTtn(order.ttn, order.id, e)}
+                        className="text-xs font-bold font-mono text-slate-900 cursor-pointer hover:underline"
+                        title="Натисніть, щоб скопіювати ТТН"
+                      >
+                        {order.ttn}
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={(e) => handleStartInlineEdit(order, e)}
+                        className="text-[10px] text-slate-400 hover:text-slate-700"
+                        title="Змінити ТТН"
+                      >
+                        ✏️
+                      </button>
+                      <span className="text-[10px] text-slate-400">
+                        {isTtnCopied ? '✓' : '📋'}
+                      </span>
+                    </div>
+                  ) : (
+                    <button 
+                      type="button"
+                      onClick={(e) => handleStartInlineEdit(order, e)}
+                      className="text-xs font-semibold text-amber-700 hover:text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-lg transition"
+                    >
+                      + Додати ТТН
+                    </button>
+                  )}
                 </div>
               )}
             </div>
 
             {/* Ціна товару, передплата та залишок до сплати */}
             <div className="pt-2 border-t border-slate-100 flex flex-col gap-1 bg-slate-50 p-2.5 rounded-xl text-xs">
-              <div className="flex justify-between font-bold text-slate-900">
+              <div className="flex justify-between font-bold text-slate-900 items-center">
                 <span>Ціна товару:</span>
                 {isEditing ? (
                   <input 
                     type="number" 
                     value={editForm.price} 
                     onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
-                    className="w-20 p-0.5 border rounded text-right bg-white"
+                    className="w-24 p-1 border rounded bg-white text-right font-bold text-slate-900"
                   />
                 ) : (
                   <span>{priceNum} грн</span>
                 )}
               </div>
-              <div className="flex justify-between text-slate-700 text-xs">
+              
+              <div className="flex justify-between text-slate-700 text-xs items-center">
                 <span>Передплата:</span>
                 {isEditing ? (
                   <input 
                     type="number" 
                     value={editForm.advance} 
                     onChange={(e) => setEditForm({ ...editForm, advance: e.target.value })}
-                    className="w-20 p-0.5 border rounded text-right bg-white"
+                    className="w-24 p-1 border rounded bg-white text-right text-slate-900"
                   />
                 ) : (
                   <span>{advanceNum} грн</span>
                 )}
               </div>
+
               <div className="flex justify-between font-semibold text-emerald-700 border-t border-slate-200/60 pt-1 text-xs">
                 <span>Залишок до сплати:</span>
                 <span>{remaining} грн</span>

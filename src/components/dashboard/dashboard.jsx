@@ -19,7 +19,6 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
 
-  // Класичні статуси без додаткової вкладки Повернення
   const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Успішно', 'Відмова'];
 
   useEffect(() => {
@@ -182,7 +181,6 @@ export default function Dashboard() {
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
 
-      // Якщо замовлення створюється з товару з папки Наявність (availability) — видаляємо його зі складу
       if (orderData.stockItemId) {
         await deleteDoc(doc(db, "stock", orderData.stockItemId));
         await fetchStockProducts();
@@ -222,7 +220,6 @@ export default function Dashboard() {
     }
   };
 
-  // Зміна статусу: при статусі "Відмова" створюємо товар у папці "Наявність"
   const handleStatusChange = async (id, newStatus) => {
     try {
       const orderRef = doc(db, "orders", id);
@@ -261,7 +258,7 @@ export default function Dashboard() {
     : orders.filter(o => o.status === activeFilter);
 
   return (
-    <div className="p-3 sm:p-4 max-w-md mx-auto pt-4 w-full">
+    <div className="p-3 sm:p-4 max-w-md mx-auto pt-4 w-full overflow-hidden">
       <div className="mb-3">
         <button 
           type="button"
@@ -272,30 +269,33 @@ export default function Dashboard() {
         </button>
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-2 mb-3 max-w-full touch-pan-x scrollbar-none">
-        {statuses.map((status) => {
-          const count = status === 'Всі' ? orders.length : orders.filter(o => o.status === status).length;
-          const isActive = activeFilter === status;
-          return (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setActiveFilter(status)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
-                isActive 
-                  ? 'bg-slate-900 text-white shadow-xs' 
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              <span>{status}</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-500'
-              }`}>
-                {count}
-              </span>
-            </button>
-          );
-        })}
+      {/* Контейнер статусів із фіксованим скролом */}
+      <div className="w-full overflow-x-auto pb-2 mb-3">
+        <div className="flex gap-1.5 flex-nowrap min-w-max">
+          {statuses.map((status) => {
+            const count = status === 'Всі' ? orders.length : orders.filter(o => o.status === status).length;
+            const isActive = activeFilter === status;
+            return (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setActiveFilter(status)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                  isActive 
+                    ? 'bg-slate-900 text-white shadow-xs' 
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>{status}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {loading ? (

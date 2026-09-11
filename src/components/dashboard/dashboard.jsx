@@ -8,7 +8,8 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc, 
-  doc 
+  doc, 
+  increment 
 } from "firebase/firestore";
 
 export default function Dashboard() {
@@ -109,6 +110,8 @@ export default function Dashboard() {
           colorImage: item.colorImage || '',
           createdAt: item.createdAt || '',
           stockItemId: item.stockItemId || '',
+          usedBox: item.usedBox || '',
+          usedDustbag: item.usedDustbag || '',
           productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color || ''}, ${item.material || ''}, ${item.filling || item.sole || ''}`
         });
       });
@@ -132,6 +135,7 @@ export default function Dashboard() {
     setShowNewOrderModal(true);
   };
 
+  // Збереження ТТН + Автоматичне списування матеріалів
   const handleInlineSaveOrder = async (updatedOrder) => {
     try {
       const orderRef = doc(db, "orders", updatedOrder.id);
@@ -144,16 +148,36 @@ export default function Dashboard() {
         ttn: updatedOrder.ttn || '',
         price: Number(updatedOrder.price) || 0,
         advance: Number(updatedOrder.advance) || 0,
+        usedBox: updatedOrder.selectedBox || updatedOrder.usedBox || '',
+        usedDustbag: updatedOrder.selectedDustbag || updatedOrder.usedDustbag || ''
       };
 
       await updateDoc(orderRef, updateData);
 
-      setOrders(prevOrders => {
-        const updatedList = prevOrders.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder, ...updateData } : o);
-        return sortOrdersList(updatedList);
-      });
+      // Списання коробки зі складу (quantity - 1)
+      if (updatedOrder.selectedBox && updatedOrder.selectedBox !== 'Без коробки') {
+        const stockSnap = await getDocs(collection(db, "stock"));
+        stockSnap.forEach(async (docSnap) => {
+          if (docSnap.data().name === updatedOrder.selectedBox) {
+            await updateDoc(doc(db, "stock", docSnap.id), { quantity: increment(-1) });
+          }
+        });
+      }
+
+      // Списання пильовика зі складу (quantity - 1)
+      if (updatedOrder.selectedDustbag && updatedOrder.selectedDustbag !== 'Без пильовика') {
+        const stockSnap = await getDocs(collection(db, "stock"));
+        stockSnap.forEach(async (docSnap) => {
+          if (docSnap.data().name === updatedOrder.selectedDustbag) {
+            await updateDoc(doc(db, "stock", docSnap.id), { quantity: increment(-1) });
+          }
+        });
+      }
+
+      await fetchOrders();
+      await fetchStockProducts();
     } catch (error) {
-      console.error('Помилка оновлення картки:', error);
+      console.error('Помилка оновлення картки та списування:', error);
       alert('Не вдалося зберегти зміни');
     }
   };
@@ -246,6 +270,7 @@ export default function Dashboard() {
     }
   };
 
+  // Зміна статусу: При "Відмові" взуття повертається у наявність, а коробки/пильовики на склад (+1 шт.)
   const handleStatusChange = async (id, newStatus) => {
     try {
       const orderRef = doc(db, "orders", id);
@@ -254,6 +279,7 @@ export default function Dashboard() {
       await updateDoc(orderRef, { status: newStatus });
 
       if (newStatus === 'Відмова' && targetOrder) {
+        // 1. Повертаємо пара в "Наявність"
         await addDoc(collection(db, "stock"), {
           folderId: 'availability',
           name: targetOrder.productTitle || targetOrder.name || 'Товар з відмови',
@@ -269,6 +295,18 @@ export default function Dashboard() {
           status: 'відмова',
           image: targetOrder.image || targetOrder.productImage || '',
           createdAt: new Date().toISOString()
+        });
+
+        // 2. Повертаємо коробку та пильовик на склад (quantity + 1)
+        const stockSnap = await getDocs(collection(db, "stock"));
+        stockSnap.forEach(async (docSnap) => {
+          const itemData = docSnap.data();
+          if (targetOrder.usedBox && itemData.name === targetOrder.usedBox) {
+            await updateDoc(doc(db, "stock", docSnap.id), { quantity: increment(1) });
+          }
+          if (targetOrder.usedDustbag && itemData.name === targetOrder.usedDustbag) {
+            await updateDoc(doc(db, "stock", docSnap.id), { quantity: increment(1) });
+          }
         });
 
         await fetchStockProducts();

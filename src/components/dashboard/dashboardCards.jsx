@@ -4,6 +4,8 @@ import { Edit2, Trash2, Check, Copy } from 'lucide-react';
 export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [editingTtnId, setEditingTtnId] = useState(null);
   const [ttnValues, setTtnValues] = useState({});
+  const [boxType, setBoxType] = useState('Коробки (Великі)');
+  const [dustbagType, setDustbagType] = useState('Пильовик (Великі)');
 
   const statusOptions = ['Нове', 'В роботі', 'З наявності', 'Доставка', 'Успішно', 'Відмова'];
 
@@ -29,7 +31,12 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
   const handleTtnSave = (order) => {
     const newTtn = ttnValues[order.id] !== undefined ? ttnValues[order.id] : (order.ttn || '');
     if (typeof onInlineSave === 'function') {
-      onInlineSave({ ...order, ttn: newTtn });
+      onInlineSave({ 
+        ...order, 
+        ttn: newTtn,
+        selectedBox: boxType,
+        selectedDustbag: dustbagType
+      });
     }
     setEditingTtnId(null);
   };
@@ -101,7 +108,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
               </div>
             )}
 
-            {/* Назва та характеристики по середині */}
+            {/* Назва та характеристики */}
             <div className="text-center space-y-1 py-1">
               <h4 className="font-bold text-slate-900 text-base">{order.productTitle || 'Клоги'}</h4>
               <p className="text-sm font-extrabold text-slate-900">
@@ -109,7 +116,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
               </p>
             </div>
 
-            {/* Блок даних клієнта (по середині) */}
+            {/* Дані клієнта */}
             <div className="bg-slate-50/60 rounded-2xl p-3.5 text-center relative border border-slate-100 space-y-1">
               <button 
                 type="button" 
@@ -127,43 +134,75 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
               </div>
             </div>
 
-            {/* Блок ТТН з пунктирною рамкою */}
-            <div className="border border-dashed border-slate-200 rounded-xl p-2.5 flex items-center justify-between text-xs bg-white">
-              <span className="font-bold text-slate-500 uppercase tracking-wider">TTH:</span>
-              
-              {isEditingTtn ? (
-                <div className="flex items-center gap-1.5">
+            {/* Блок ТТН з вибором коробки та пильовика */}
+            <div className="border border-dashed border-slate-200 rounded-xl p-2.5 space-y-2 bg-white text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-500 uppercase tracking-wider">TTH:</span>
+                {!isEditingTtn && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTtnValues({ ...ttnValues, [order.id]: order.ttn || '' });
+                      setEditingTtnId(order.id);
+                    }}
+                    className="font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
+                  >
+                    {order.ttn ? order.ttn : '+ Додати ТТН'}
+                  </button>
+                )}
+              </div>
+
+              {isEditingTtn && (
+                <div className="space-y-2.5 pt-1 border-t border-slate-100">
                   <input
                     type="text"
                     value={ttnValues[order.id] !== undefined ? ttnValues[order.id] : (order.ttn || '')}
                     onChange={(e) => setTtnValues({ ...ttnValues, [order.id]: e.target.value })}
-                    placeholder="Введіть ТТН"
-                    className="px-2 py-1 border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none focus:border-slate-900 w-36"
+                    placeholder="Введіть номер ТТН"
+                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none focus:border-slate-900"
                     autoFocus
                   />
+
+                  {/* Швидкий вибір пакування */}
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <label className="text-slate-500 font-medium block mb-1">Коробка:</label>
+                      <select 
+                        value={boxType} 
+                        onChange={e => setBoxType(e.target.value)}
+                        className="w-full p-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 font-medium cursor-pointer"
+                      >
+                        <option value="Коробки (Великі)">Велика коробка</option>
+                        <option value="Коробки (Малі)">Мала коробка</option>
+                        <option value="Без коробки">Без коробки</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium block mb-1">Пильовик:</label>
+                      <select 
+                        value={dustbagType} 
+                        onChange={e => setDustbagType(e.target.value)}
+                        className="w-full p-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 font-medium cursor-pointer"
+                      >
+                        <option value="Пильовик (Великі)">Великий пильовик</option>
+                        <option value="Пильовик (Малі)">Малий пильовик</option>
+                        <option value="Без пильовика">Без пильовика</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => handleTtnSave(order)}
-                    className="p-1 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
+                    className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
-                    <Check size={14} />
+                    <Check size={14} /> Зберегти та списати пакування
                   </button>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTtnValues({ ...ttnValues, [order.id]: order.ttn || '' });
-                    setEditingTtnId(order.id);
-                  }}
-                  className="font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
-                >
-                  {order.ttn ? order.ttn : '+ Додати ТТН'}
-                </button>
               )}
             </div>
 
-            {/* Табличний блок цін */}
+            {/* Блок цін */}
             <div className="bg-slate-50/70 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-100">
               <div className="flex justify-between items-center">
                 <span className="font-semibold text-slate-900">Ціна товару:</span>

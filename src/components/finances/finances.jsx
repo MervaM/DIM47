@@ -72,18 +72,22 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }, 0);
   };
 
-  // 1. Транзакції із замовлень (Включаючи закупку парам з наявності)
+  // 1. Транзакції пошиття та закупки взуття (включаючи "З наявності")
   const orderTailoringCostTx = orders
-    .filter(o => Number(o.cost) > 0 || Number(o.price) > 0)
-    .map(o => ({
-      id: `ord-cost-${o.id}`,
-      date: o.date || 'Замовлення',
-      type: 'Витрата',
-      category: 'Пошиття взуття',
-      comment: `${o.productTitle || o.name || 'Взуття'}${o.status === 'З наявності' ? ' (З наявності)' : ''}`,
-      amount: Number(o.cost) || 0,
-      isAuto: true
-    }));
+    .map(o => {
+      // Підтягуємо вартість закупки з будь-якого доступного поля себевартості
+      const purchaseCost = Number(o.cost) || Number(o.purchasePrice) || Number(o.priceCost) || Number(o.purchase_price) || 0;
+      return {
+        id: `ord-cost-${o.id}`,
+        date: o.date || 'Замовлення',
+        type: 'Витрата',
+        category: 'Пошиття взуття',
+        comment: `${o.productTitle || o.title || o.name || 'Взуття'}${o.status === 'З наявності' ? ' (Наявність)' : ''}`,
+        amount: purchaseCost,
+        isAuto: true
+      };
+    })
+    .filter(t => t.amount > 0 || t.comment);
 
   const successfulOrdersTx = orders
     .filter(o => (o.status || '').toLowerCase() === 'успішно')
@@ -97,7 +101,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         date: o.date || 'Замовлення',
         type: 'Дохід',
         category: 'Успішно',
-        comment: `Залишок після передплати: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
+        comment: `Залишок після передплати: ${o.productTitle || o.title || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
         amount: finalPayment,
         isAuto: true
       };
@@ -110,7 +114,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       date: o.date || 'Замовлення',
       type: 'Дохід',
       category: 'Передплата',
-      comment: `Передплата: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
+      comment: `Передплата: ${o.productTitle || o.title || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
       amount: Number(o.advance) || Number(o.prepayment) || 0,
       isAuto: true
     }));
@@ -262,8 +266,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
 
       if (String(tx.id).startsWith('ord-cost-')) {
         const orderId = tx.id.replace('ord-cost-', '');
-        await updateDoc(doc(db, 'orders', orderId), { cost: newAmount });
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, cost: newAmount } : o));
+        await updateDoc(doc(db, 'orders', orderId), { cost: newAmount, purchasePrice: newAmount });
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, cost: newAmount, purchasePrice: newAmount } : o));
       } else if (String(tx.id).startsWith('ord-rev-')) {
         const orderId = tx.id.replace('ord-rev-', '');
         await updateDoc(doc(db, 'orders', orderId), { price: newAmount });
@@ -297,18 +301,11 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }
   };
 
-  const getCategoryMonthlyChart = (catKey) => {
-    const list = allTransactions.filter(t => (t.category || '').toLowerCase().includes(catKey.toLowerCase()));
-    const monthsMap = {};
-    list.forEach(t => {
-      const month = (t.date || '').substring(0, 7) || '2026-09';
-      monthsMap[month] = (monthsMap[month] || 0) + Number(t.amount || 0);
-    });
-    const maxVal = Math.max(...Object.values(monthsMap), 1);
-    return { list, monthsMap, maxVal };
+  const getCategoryDetails = (catKey) => {
+    return allTransactions.filter(t => (t.category || '').toLowerCase().includes(catKey.toLowerCase()));
   };
 
-  const activeAnalytics = selectedCategoryAnalytics ? getCategoryMonthlyChart(selectedCategoryAnalytics) : null;
+  const categoryDetailsList = selectedCategoryAnalytics ? getCategoryDetails(selectedCategoryAnalytics) : [];
 
   return (
     <div className="space-y-4 p-3 sm:p-4 max-w-4xl mx-auto">
@@ -640,8 +637,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       )}
 
-      {/* МОДАЛЬНЕ ВІКНО АНАЛІТИКИ КАТЕГОРІЙ */}
-      {selectedCategoryAnalytics && activeAnalytics && (
+      {/* МОДАЛЬНЕ ВІКНО ДЕТАЛЕЙ КАТЕГОРІЇ (БЕЗ ГРАФІКА ДИНАМІКИ) */}
+      {selectedCategoryAnalytics && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedCategoryAnalytics(null)}
@@ -652,7 +649,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
           >
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-sm capitalize">
-                Графік та деталі: {selectedCategoryAnalytics}
+                Всі операції: {selectedCategoryAnalytics}
               </h3>
               <button 
                 type="button" 
@@ -663,42 +660,21 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               </button>
             </div>
 
-            <div className="space-y-2 pt-1">
-              <span className="text-xs font-semibold text-slate-600">Динаміка витрат за місяцями:</span>
-              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2">
-                {Object.keys(activeAnalytics.monthsMap).length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-4">Немає даних для графіку</p>
+            <div className="space-y-2">
+              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                {categoryDetailsList.length === 0 ? (
+                  <p className="text-center py-6 text-slate-400 text-xs">Немає збережених операцій</p>
                 ) : (
-                  Object.entries(activeAnalytics.monthsMap).map(([m, sum]) => (
-                    <div key={m} className="space-y-1 text-xs">
-                      <div className="flex justify-between font-medium text-slate-700 text-[11px]">
-                        <span>{m}</span>
-                        <span className="font-bold text-slate-900">{sum.toLocaleString('uk-UA')} грн</span>
+                  categoryDetailsList.map(t => (
+                    <div key={t.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 text-xs flex justify-between items-center">
+                      <div>
+                        <div className="font-bold text-slate-900">{t.comment}</div>
+                        <div className="text-[10px] text-slate-400">{t.date}</div>
                       </div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-slate-900 h-full rounded-full transition-all duration-500"
-                          style={{ width: `${(sum / activeAnalytics.maxVal) * 100}%` }}
-                        ></div>
-                      </div>
+                      <div className="font-extrabold text-slate-900">{t.amount} грн</div>
                     </div>
                   ))
                 )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <span className="text-xs font-semibold text-slate-600">Всі операції категорії:</span>
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                {activeAnalytics.list.map(t => (
-                  <div key={t.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs flex justify-between items-center">
-                    <div>
-                      <div className="font-bold text-slate-900">{t.comment}</div>
-                      <div className="text-[10px] text-slate-400">{t.date}</div>
-                    </div>
-                    <div className="font-bold text-slate-900">{t.amount} грн</div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>

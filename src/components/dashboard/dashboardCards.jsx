@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit2, Trash2, Check } from 'lucide-react';
+import { Edit2, Trash2, Check, Copy } from 'lucide-react';
 
 export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [editingTtnId, setEditingTtnId] = useState(null);
@@ -51,7 +51,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
         return (
           <div 
             key={order.id}
-            className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3.5 space-y-3 relative overflow-hidden"
+            className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-4 space-y-3.5 relative"
           >
             {/* Верхній блок: Статус та Дії */}
             <div className="flex items-center justify-between gap-2">
@@ -88,86 +88,94 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
             </div>
 
             {/* Фото товару */}
-            {order.image ? (
-              <div className="w-full h-52 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 flex items-center justify-center">
+            {order.image && (
+              <div className="w-full h-64 bg-slate-50 rounded-2xl overflow-hidden border border-slate-100 flex items-center justify-center">
                 <img src={order.image} alt="" className="w-full h-full object-cover" />
               </div>
-            ) : null}
+            )}
 
-            {/* Назва та характеристики ПО СЕРЕДИНІ */}
-            <div className="text-center space-y-1">
-              <h4 className="font-bold text-slate-900 text-base">{order.productTitle || 'Товар'}</h4>
+            {/* Зразок кольору / матеріалу */}
+            {order.colorImage && (
+              <div className="w-full h-24 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 flex items-center justify-center">
+                <img src={order.colorImage} alt="Колір" className="w-full h-full object-cover" />
+              </div>
+            )}
+
+            {/* Назва та характеристики по середині */}
+            <div className="text-center space-y-1 py-1">
+              <h4 className="font-bold text-slate-900 text-base">{order.productTitle || 'Клоги'}</h4>
               <p className="text-sm font-extrabold text-slate-900">
                 {order.productDetails || `${order.size || '—'} розм., ${order.colorText || ''}, ${order.material || ''}`}
               </p>
             </div>
 
-            {/* Блок даних клієнта з можливістю додати ТТН */}
-            <div className="border border-slate-900/80 rounded-2xl p-3 text-xs space-y-1.5 bg-white">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 font-medium">Клієнт:</span>
-                <span className="font-bold text-slate-900 text-right">{order.client || '—'}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 font-medium">Телефон:</span>
-                <span className="font-bold text-slate-900 text-right">{order.phone || '—'}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 font-medium">Доставка:</span>
-                <span className="font-bold text-slate-900 text-right truncate max-w-[200px]">
-                  {order.city} {order.warehouse}
-                </span>
-              </div>
+            {/* Блок даних клієнта (по середині) */}
+            <div className="bg-slate-50/60 rounded-2xl p-3.5 text-center relative border border-slate-100 space-y-1">
+              <button 
+                type="button" 
+                onClick={() => onEditModal(order)}
+                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 p-1 border rounded-lg bg-white"
+                title="Редагувати дані клієнта"
+              >
+                <Copy size={13} />
+              </button>
 
-              {/* Поле додавання ТТН */}
-              <div className="flex justify-between items-center pt-1 border-t border-slate-100">
-                <span className="text-slate-400 font-medium">ТТН:</span>
-                {isEditingTtn ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={ttnValues[order.id] !== undefined ? ttnValues[order.id] : (order.ttn || '')}
-                      onChange={(e) => setTtnValues({ ...ttnValues, [order.id]: e.target.value })}
-                      placeholder="Введіть ТТН"
-                      className="px-2 py-0.5 border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none focus:border-slate-900 w-36"
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleTtnSave(order)}
-                      className="p-1 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
-                    >
-                      <Check size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <span
-                    onClick={() => {
-                      setTtnValues({ ...ttnValues, [order.id]: order.ttn || '' });
-                      setEditingTtnId(order.id);
-                    }}
-                    className="font-bold text-slate-900 text-right cursor-pointer hover:underline text-xs"
-                    title="Натисніть, щоб змінити ТТН"
-                  >
-                    {order.ttn ? order.ttn : '+ Додати ТТН'}
-                  </span>
-                )}
+              <div className="font-bold text-slate-900 text-base">{order.client || 'Клієнт'}</div>
+              <div className="text-xs font-semibold text-slate-600">{order.phone || '—'}</div>
+              <div className="text-xs text-slate-500">
+                {order.city || ''}{order.city && order.warehouse ? ', ' : ''}{order.warehouse || ''}
               </div>
             </div>
 
-            {/* Колонки цін: Вартість, Передоплата, Залишок до оплати */}
-            <div className="grid grid-cols-3 gap-1 text-center bg-slate-50/70 p-2.5 rounded-2xl text-xs border border-slate-100">
-              <div>
-                <div className="text-[11px] text-slate-400 font-medium mb-0.5">Сума</div>
-                <div className="font-bold text-slate-900">{order.price || 0} грн</div>
+            {/* Блок ТТН з пунктирною рамкою */}
+            <div className="border border-dashed border-slate-200 rounded-xl p-2.5 flex items-center justify-between text-xs bg-white">
+              <span className="font-bold text-slate-500 uppercase tracking-wider">TTH:</span>
+              
+              {isEditingTtn ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={ttnValues[order.id] !== undefined ? ttnValues[order.id] : (order.ttn || '')}
+                    onChange={(e) => setTtnValues({ ...ttnValues, [order.id]: e.target.value })}
+                    placeholder="Введіть ТТН"
+                    className="px-2 py-1 border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none focus:border-slate-900 w-36"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleTtnSave(order)}
+                    className="p-1 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
+                  >
+                    <Check size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTtnValues({ ...ttnValues, [order.id]: order.ttn || '' });
+                    setEditingTtnId(order.id);
+                  }}
+                  className="font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
+                >
+                  {order.ttn ? order.ttn : '+ Додати ТТН'}
+                </button>
+              )}
+            </div>
+
+            {/* Табличний блок цін */}
+            <div className="bg-slate-50/70 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-100">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-slate-900">Ціна товару:</span>
+                <span className="font-bold text-slate-900 text-sm">{order.price || 0} грн</span>
               </div>
-              <div>
-                <div className="text-[11px] text-slate-400 font-medium mb-0.5">Передплата</div>
-                <div className="font-bold text-amber-600">{order.advance || 0} грн</div>
+              <div className="flex justify-between items-center text-slate-500">
+                <span>Передплата:</span>
+                <span className="font-medium text-slate-700">{order.advance || 0} грн</span>
               </div>
-              <div>
-                <div className="text-[11px] text-slate-400 font-medium mb-0.5">Залишок</div>
-                <div className="font-bold text-emerald-600">{remainingPayment > 0 ? remainingPayment : 0} грн</div>
+              <div className="flex justify-between items-center pt-1.5 border-t border-slate-200/60 font-bold">
+                <span className="text-emerald-600">Залишок до сплати:</span>
+                <span className="text-emerald-600 text-sm">{remainingPayment > 0 ? remainingPayment : 0} грн</span>
               </div>
             </div>
           </div>

@@ -36,7 +36,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [isStockImagesOpen, setIsStockImagesOpen] = useState(false);
   const [activeImageType, setActiveImageType] = useState(null);
   
-  // За замовчуванням фільтр встановлено на 'shoes' (Взуття)
   const [stockFolderFilter, setStockFolderFilter] = useState('shoes');
 
   const fileInputRef = useRef(null);
@@ -70,14 +69,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   let paletteStock = currentStock.filter(isColorOrMaterialItem);
   const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
 
-  // Сувора фільтрація між взуттям та наявністю
   const getFilteredStockList = () => {
     if (activeImageType === 'color') return paletteStock;
 
     if (stockFolderFilter === 'availability') {
       return shoesStock.filter(item => item.folderId === 'availability');
     }
-    // Вкладинка 'shoes' (Взуття) за замовчуванням
     return shoesStock.filter(item => item.folderId === 'shoes' || !item.folderId);
   };
 
@@ -491,7 +488,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         </form>
       </div>
 
-      {/* МОДАЛКА ВИБОРУ ЗОБРАЖЕННЯ ЗІ СКЛАДУ */}
       {isStockImagesOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4"
@@ -508,7 +504,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
 
-            {/* Тільки дві вкладки: Взуття та Наявність */}
             {activeImageType !== 'color' && (
               <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
                 <button
@@ -542,7 +537,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                           <img src={img} alt="" className="w-full h-full object-cover" />
                           <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] p-0.5 truncate text-center flex flex-col justify-center">
                             <span className="truncate font-semibold">{item.name || 'Товар'}</span>
-                            {/* На вкладці "Наявність" показуємо розмір і колір */}
                             {isAvailability && (
                               <span className="text-[8px] text-amber-300 font-bold truncate">
                                 {item.size ? `${item.size} розм.` : ''} {item.color || ''}

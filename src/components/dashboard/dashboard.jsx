@@ -19,7 +19,8 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
 
-  const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Успішно', 'Відмова'];
+  // Список статусів включно зі статусом "З наявності"
+  const statuses = ['Всі', 'Нове', 'В роботі', 'З наявності', 'Доставка', 'Успішно', 'Відмова'];
 
   useEffect(() => {
     fetchOrders();
@@ -158,6 +159,9 @@ export default function Dashboard() {
 
   const handleSaveOrder = async (orderData) => {
     try {
+      // Якщо товар із папки "Наявність" (є stockItemId) — початковий статус "З наявності", інакше "Нове"
+      const initialStatus = orderData.stockItemId ? 'З наявності' : 'Нове';
+
       const dbPayload = {
         clientName: orderData.clientName || 'Без імені',
         clientPhone: orderData.phone || '—',
@@ -181,6 +185,7 @@ export default function Dashboard() {
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
 
+      // Видаляємо товар з папки "Наявність" після додавання в замовлення
       if (orderData.stockItemId) {
         await deleteDoc(doc(db, "stock", orderData.stockItemId));
         await fetchStockProducts();
@@ -193,7 +198,7 @@ export default function Dashboard() {
         const newDbPayload = {
           ...dbPayload,
           date: new Date().toLocaleDateString('uk-UA'),
-          status: 'Нове',
+          status: initialStatus,
           createdAt: new Date().toISOString()
         };
         await addDoc(collection(db, "orders"), newDbPayload);
@@ -269,7 +274,6 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Контейнер статусів із фіксованим скролом */}
       <div className="w-full overflow-x-auto pb-2 mb-3">
         <div className="flex gap-1.5 flex-nowrap min-w-max">
           {statuses.map((status) => {

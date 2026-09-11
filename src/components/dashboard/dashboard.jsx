@@ -19,7 +19,7 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
 
-  // 1. Додано статус "Повернення"
+  // Список статусів із доданим статусом "Повернення"
   const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Успішно', 'Відмова', 'Повернення'];
 
   useEffect(() => {
@@ -182,7 +182,7 @@ export default function Dashboard() {
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
 
-      // 2. Якщо вибрано товар із наявності — видаляємо його з папки "availability"
+      // Якщо замовлення створюється з товару "Наявності" — видаляємо його зі "stock"
       if (orderData.stockItemId && orderData.folderId === 'availability') {
         await deleteDoc(doc(db, "stock", orderData.stockItemId));
         await fetchStockProducts();
@@ -222,7 +222,6 @@ export default function Dashboard() {
     }
   };
 
-  // 3. Автоматична логіка статусу "Повернення"
   const handleStatusChange = async (id, newStatus) => {
     try {
       const orderRef = doc(db, "orders", id);
@@ -230,7 +229,7 @@ export default function Dashboard() {
 
       await updateDoc(orderRef, { status: newStatus });
 
-      // Якщо обрано статус "Повернення", повертаємо товар у папку "availability"
+      // При виборі статусу "Повернення" товар переноситься назад в "availability"
       if (newStatus === 'Повернення' && targetOrder) {
         await addDoc(collection(db, "stock"), {
           folderId: 'availability',
@@ -262,7 +261,7 @@ export default function Dashboard() {
     : orders.filter(o => o.status === activeFilter);
 
   return (
-    <div className="p-3 sm:p-4 max-w-md mx-auto pt-4">
+    <div className="p-3 sm:p-4 max-w-md mx-auto pt-4 w-full">
       <div className="mb-3">
         <button 
           type="button"
@@ -273,7 +272,8 @@ export default function Dashboard() {
         </button>
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3 scrollbar-none">
+      {/* Скролювальна панель статусів */}
+      <div className="flex gap-1.5 overflow-x-auto flex-nowrap pb-2 mb-3 max-w-full touch-pan-x scrollbar-thin">
         {statuses.map((status) => {
           const count = status === 'Всі' ? orders.length : orders.filter(o => o.status === status).length;
           const isActive = activeFilter === status;
@@ -282,7 +282,7 @@ export default function Dashboard() {
               key={status}
               type="button"
               onClick={() => setActiveFilter(status)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
                 isActive 
                   ? 'bg-slate-900 text-white shadow-xs' 
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'

@@ -10,8 +10,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
 
   // Пошук та фільтри
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('всі'); // всі, взуття, коробки, пильовики, реклама, успішно, передплата
-  const [selectedCategoryAnalytics, setSelectedCategoryAnalytics] = useState(null); // категорія для модалки з графіком
+  const [selectedFilter, setSelectedFilter] = useState('всі');
+  const [selectedCategoryAnalytics, setSelectedCategoryAnalytics] = useState(null);
 
   // Стейт форми
   const [type, setType] = useState('Витрата');
@@ -51,30 +51,34 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }, 0);
   };
 
-  // 1. Формування єдиного списку ВСІХ операцій
+  // 1. Формування транзакцій із замовлень
+  // Витрата на пошиття рахується для ВСІХ нових замовлень, ОКРІМ тих, що взяті з "Наявності"
+  const orderTailoringCostTx = orders
+    .filter(o => o.status !== 'З наявності' && !o.stockItemId)
+    .map(o => ({
+      id: `ord-cost-${o.id}`,
+      date: o.date || 'Замовлення',
+      type: 'Витрата',
+      category: 'Пошиття взуття',
+      comment: `Собівартість пошиття: ${o.productTitle || o.name || 'Взуття'} (${o.size || '—'} розм.)`,
+      amount: Number(o.cost) || Number(o.price) || 0,
+      isAuto: true
+    }));
+
+  // Дохід від успішно закритих замовлень
   const successfulOrdersTx = orders
     .filter(o => (o.status || '').toLowerCase() === 'успішно')
-    .flatMap(o => [
-      {
-        id: `ord-rev-${o.id}`,
-        date: o.date || 'Замовлення',
-        type: 'Дохід',
-        category: 'Успішно',
-        comment: `Повна оплата замовлення: ${o.productTitle || 'Взуття'} (${o.client || 'Клієнт'})`,
-        amount: Number(o.price) || 0,
-        isAuto: true
-      },
-      {
-        id: `ord-cost-${o.id}`,
-        date: o.date || 'Замовлення',
-        type: 'Витрата',
-        category: 'Взуття',
-        comment: `Закупка/пошиття: ${o.productTitle || 'Взуття'}`,
-        amount: Number(o.cost) || 0,
-        isAuto: true
-      }
-    ]);
+    .map(o => ({
+      id: `ord-rev-${o.id}`,
+      date: o.date || 'Замовлення',
+      type: 'Дохід',
+      category: 'Успішно',
+      comment: `Оплата замовлення: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
+      amount: Number(o.price) || 0,
+      isAuto: true
+    }));
 
+  // Передплати за замовлення із відмовою
   const cancelledOrdersTx = orders
     .filter(o => (o.status || '').toLowerCase() === 'відмова' && (Number(o.advance) || Number(o.prepayment)))
     .map(o => ({
@@ -82,11 +86,12 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       date: o.date || 'Відмова',
       type: 'Дохід',
       category: 'Передплата',
-      comment: `Передплата (відмова): ${o.productTitle || 'Взуття'} (${o.client || 'Клієнт'})`,
+      comment: `Передплата (відмова): ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
       amount: Number(o.advance) || Number(o.prepayment) || 0,
       isAuto: true
     }));
 
+  // Пакування зі складу
   const stockTx = stock
     .filter(item => {
       const name = (item.name || '').toLowerCase();
@@ -113,9 +118,15 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       };
     });
 
-  const allTransactions = [...successfulOrdersTx, ...cancelledOrdersTx, ...stockTx, ...finances];
+  const allTransactions = [
+    ...orderTailoringCostTx, 
+    ...successfulOrdersTx, 
+    ...cancelledOrdersTx, 
+    ...stockTx, 
+    ...finances
+  ];
 
-  // 2. Фільтрація операцій
+  // Фільтрація операцій
   const filteredTransactions = allTransactions.filter(tx => {
     const matchesSearch = !searchQuery.trim() || 
       (tx.comment || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -124,31 +135,31 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     const cat = (tx.category || '').toLowerCase();
     let matchesFilter = true;
 
-    if (selectedFilter === 'взуття') matchesFilter = cat === 'взуття';
+    if (selectedFilter === 'взуття') matchesFilter = cat.includes('пошиття') || cat === 'взуття';
     else if (selectedFilter === 'коробки') matchesFilter = cat === 'коробки';
     else if (selectedFilter === 'пильовики') matchesFilter = cat === 'пильовики';
     else if (selectedFilter === 'реклама') matchesFilter = cat.includes('реклама');
     else if (selectedFilter === 'успішно') matchesFilter = cat === 'успішно';
     else if (selectedFilter === 'передплата') matchesFilter = cat === 'передплата';
-    else if (selectedFilter === 'інше') matchesFilter = !['взуття', 'коробки', 'пильовики', 'реклама', 'успішно', 'передплата'].some(k => cat.includes(k));
+    else if (selectedFilter === 'інше') matchesFilter = !['пошиття', 'взуття', 'коробки', 'пильовики', 'реклама', 'успішно', 'передплата'].some(k => cat.includes(k));
 
     return matchesSearch && matchesFilter;
   });
 
-  // 3. Агреговані розрахунки для карток
+  // Підрахунки для малих карток
   const calculateCategoryStats = (catKey) => {
-    const list = allTransactions.filter(t => (t.category || '').toLowerCase().includes(catKey));
+    const list = allTransactions.filter(t => (t.category || '').toLowerCase().includes(catKey.toLowerCase()));
     const total = list.reduce((sum, t) => sum + Number(t.amount || 0), 0);
     const avg = list.length > 0 ? (total / list.length).toFixed(0) : 0;
     return { total, count: list.length, avg };
   };
 
-  const shoesStats = calculateCategoryStats('взуття');
+  const shoesStats = calculateCategoryStats('пошиття');
   const boxesStats = calculateCategoryStats('коробки');
   const dustbagsStats = calculateCategoryStats('пильовики');
   const adsStats = calculateCategoryStats('реклама');
 
-  // Глобальні підсумки
+  // Підсумки
   const totalIncome = allTransactions.filter(t => t.type === 'Дохід').reduce((s, t) => s + t.amount, 0);
   const totalExpense = allTransactions.filter(t => t.type === 'Витрата').reduce((s, t) => s + t.amount, 0);
   const netProfit = totalIncome - totalExpense;
@@ -190,7 +201,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }
   };
 
-  // Розрахунок місячного графіку для обраної категорії в модальному вікні
   const getCategoryMonthlyChart = (catKey) => {
     const list = allTransactions.filter(t => (t.category || '').toLowerCase().includes(catKey.toLowerCase()));
     const monthsMap = {};
@@ -207,7 +217,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
   const activeAnalytics = selectedCategoryAnalytics ? getCategoryMonthlyChart(selectedCategoryAnalytics) : null;
 
   return (
-    <div className="space-y-5 p-3 sm:p-4 max-w-4xl mx-auto">
+    <div className="space-y-4 p-3 sm:p-4 max-w-4xl mx-auto">
       {/* Кнопка додавання */}
       <div className="flex justify-end">
         <button 
@@ -219,7 +229,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </button>
       </div>
 
-      {/* Основні картки фінансів */}
+      {/* Основні великі картки фінансів */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
           <div className="flex justify-between items-center text-slate-500 text-xs font-medium">
@@ -236,7 +246,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg"><TrendingDown size={16} /></span>
           </div>
           <div className="text-xl font-bold text-slate-900">{totalExpense.toLocaleString('uk-UA')} грн</div>
-          <p className="text-[10px] text-slate-400">Взуття + коробки + пильовики + реклама</p>
+          <p className="text-[10px] text-slate-400">Пошиття + коробки + пильовики + реклама</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
@@ -251,49 +261,49 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       </div>
 
-      {/* Клікабельні картки аналітики по категоріях */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      {/* Зменшені 4 компактні картки аналітики */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
-          { key: 'коробки', title: 'Коробки', stats: boxesStats, color: 'border-amber-200 bg-amber-50/40' },
-          { key: 'пильовики', title: 'Пильовики', stats: dustbagsStats, color: 'border-blue-200 bg-blue-50/40' },
-          { key: 'взуття', title: 'Пошиття взуття', stats: shoesStats, color: 'border-purple-200 bg-purple-50/40' },
-          { key: 'реклама', title: 'Реклама / Таргет', stats: adsStats, color: 'border-emerald-200 bg-emerald-50/40' }
+          { key: 'коробки', title: 'Коробки', stats: boxesStats, color: 'border-amber-200 bg-amber-50/30 hover:bg-amber-50/60' },
+          { key: 'пильовики', title: 'Пильовики', stats: dustbagsStats, color: 'border-blue-200 bg-blue-50/30 hover:bg-blue-50/60' },
+          { key: 'пошиття', title: 'Пошиття взуття', stats: shoesStats, color: 'border-purple-200 bg-purple-50/30 hover:bg-purple-50/60' },
+          { key: 'реклама', title: 'Реклама / Таргет', stats: adsStats, color: 'border-emerald-200 bg-emerald-50/30 hover:bg-emerald-50/60' }
         ].map(item => (
           <div
             key={item.key}
             onClick={() => setSelectedCategoryAnalytics(item.key)}
-            className={`p-3 rounded-2xl border ${item.color} cursor-pointer hover:shadow-md transition space-y-1 relative group`}
+            className={`p-2.5 rounded-xl border ${item.color} cursor-pointer transition space-y-0.5 group`}
           >
             <div className="flex justify-between items-center">
-              <span className="text-[11px] font-bold text-slate-700">{item.title}</span>
-              <BarChart2 size={14} className="text-slate-400 group-hover:text-slate-900 transition" />
+              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{item.title}</span>
+              <BarChart2 size={12} className="text-slate-400 group-hover:text-slate-900 transition" />
             </div>
-            <div className="text-sm font-black text-slate-900">{item.stats.total.toLocaleString('uk-UA')} грн</div>
-            <div className="text-[9px] text-slate-500 font-medium">
-              За 1 заведення: ~{item.stats.avg} грн ({item.stats.count} заведень)
+            <div className="text-xs font-black text-slate-900">{item.stats.total.toLocaleString('uk-UA')} грн</div>
+            <div className="text-[9px] text-slate-500 font-medium truncate">
+              ~{item.stats.avg} грн ({item.stats.count} завед.)
             </div>
           </div>
         ))}
       </div>
 
       {/* Пошук та Кнопкові фільтри */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 space-y-3">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 space-y-3">
         <div className="flex flex-col sm:flex-row gap-2 justify-between items-center">
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input 
               type="text" 
-              placeholder="Пошук за назвою чи коментарем..."
+              placeholder="Пошук операції..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-slate-900"
+              className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-slate-900"
             />
           </div>
 
-          <div className="flex gap-1 overflow-x-auto w-full sm:w-auto pb-1 scrollbar-none">
+          <div className="flex gap-1 overflow-x-auto w-full sm:w-auto pb-0.5 scrollbar-none">
             {[
               { id: 'всі', name: 'Усі' },
-              { id: 'взуття', name: 'Взуття' },
+              { id: 'взуття', name: 'Пошиття' },
               { id: 'коробки', name: 'Коробки' },
               { id: 'пильовики', name: 'Пильовики' },
               { id: 'реклама', name: 'Реклама' },
@@ -305,8 +315,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                 key={f.id}
                 type="button"
                 onClick={() => setSelectedFilter(f.id)}
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold whitespace-nowrap cursor-pointer transition ${
-                  selectedFilter === f.id ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap cursor-pointer transition ${
+                  selectedFilter === f.id ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                 }`}
               >
                 {f.name}
@@ -319,48 +329,48 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-100 text-slate-400 font-medium">
-                <th className="pb-2.5">Дата</th>
-                <th className="pb-2.5">Тип</th>
-                <th className="pb-2.5">Категорія</th>
-                <th className="pb-2.5">Опис / Назва</th>
-                <th className="pb-2.5">Сума</th>
-                <th className="pb-2.5 text-right">Дії</th>
+              <tr className="border-b border-slate-100 text-slate-400 font-medium text-[11px]">
+                <th className="pb-2">Дата</th>
+                <th className="pb-2">Тип</th>
+                <th className="pb-2">Категорія</th>
+                <th className="pb-2">Опис / Назва</th>
+                <th className="pb-2">Сума</th>
+                <th className="pb-2 text-right">Дії</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-8 text-slate-400 text-xs">
+                  <td colSpan="6" className="text-center py-6 text-slate-400 text-xs">
                     Операцій за заданими фільтрами не знайдено
                   </td>
                 </tr>
               ) : (
                 filteredTransactions.map(tx => (
                   <tr key={tx.id} className="hover:bg-slate-50/70 transition">
-                    <td className="py-2.5 text-slate-500 text-[11px]">
-                      <span className="flex items-center gap-1"><Calendar size={12} /> {tx.date}</span>
+                    <td className="py-2 text-slate-500 text-[10px]">
+                      <span className="flex items-center gap-1"><Calendar size={11} /> {tx.date}</span>
                     </td>
-                    <td className="py-2.5">
+                    <td className="py-2">
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                         tx.type === 'Дохід' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
                       }`}>
                         {tx.type}
                       </span>
                     </td>
-                    <td className="py-2.5 font-semibold text-slate-900">{tx.category}</td>
-                    <td className="py-2.5 text-slate-600 text-[11px]">{tx.comment || '—'}</td>
-                    <td className={`py-2.5 font-bold text-xs ${tx.type === 'Дохід' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    <td className="py-2 font-semibold text-slate-900">{tx.category}</td>
+                    <td className="py-2 text-slate-600 text-[11px]">{tx.comment || '—'}</td>
+                    <td className={`py-2 font-bold text-xs ${tx.type === 'Дохід' ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {tx.type === 'Дохід' ? '+' : '-'}{tx.amount} грн
                     </td>
-                    <td className="py-2.5 text-right">
+                    <td className="py-2 text-right">
                       {!tx.isAuto && (
                         <button 
                           type="button"
                           onClick={() => handleDeleteTransaction(tx.id)}
                           className="text-rose-400 hover:text-rose-600 p-1 cursor-pointer transition"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={13} />
                         </button>
                       )}
                     </td>
@@ -372,7 +382,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       </div>
 
-      {/* МОДАЛЬНЕ ВІКНО АНАЛІТИКИ ТА ГРАФІКУ КАТЕГОРІЇ */}
+      {/* МОДАЛЬНЕ ВІКНО АНАЛІТИКИ ТА ГРАФІКУ */}
       {selectedCategoryAnalytics && activeAnalytics && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
@@ -383,19 +393,19 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-base capitalize">
-                Графік та витрати: {selectedCategoryAnalytics}
+              <h3 className="font-bold text-slate-900 text-sm capitalize">
+                Графік та деталі: {selectedCategoryAnalytics}
               </h3>
               <button 
                 type="button" 
                 onClick={() => setSelectedCategoryAnalytics(null)}
                 className="text-slate-400 hover:text-slate-700 cursor-pointer"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            {/* Графік витрат по місяцях */}
+            {/* Графік по місяцях */}
             <div className="space-y-2 pt-1">
               <span className="text-xs font-semibold text-slate-600">Динаміка витрат за місяцями:</span>
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2">
@@ -404,11 +414,11 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                 ) : (
                   Object.entries(activeAnalytics.monthsMap).map(([m, sum]) => (
                     <div key={m} className="space-y-1 text-xs">
-                      <div className="flex justify-between font-medium text-slate-700">
+                      <div className="flex justify-between font-medium text-slate-700 text-[11px]">
                         <span>{m}</span>
                         <span className="font-bold text-slate-900">{sum.toLocaleString('uk-UA')} грн</span>
                       </div>
-                      <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                         <div 
                           className="bg-slate-900 h-full rounded-full transition-all duration-500"
                           style={{ width: `${(sum / activeAnalytics.maxVal) * 100}%` }}
@@ -420,10 +430,10 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               </div>
             </div>
 
-            {/* Список витрат цієї категорії за весь час */}
+            {/* Список витрат цієї категорії */}
             <div className="space-y-2">
-              <span className="text-xs font-semibold text-slate-600">Всі операції за весь час:</span>
-              <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+              <span className="text-xs font-semibold text-slate-600">Всі операції категорії:</span>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                 {activeAnalytics.list.map(t => (
                   <div key={t.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs flex justify-between items-center">
                     <div>

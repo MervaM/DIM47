@@ -1,20 +1,17 @@
 import React, { useState, useRef } from 'react';
-import { Plus, Trash2, Edit3, X, Search } from 'lucide-react';
+import { Plus, Trash2, Edit3, X, Search, Eye } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
-export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDetails }) {
+export default function ShoesFolder({ stock, onAddItem, onDeleteItem }) {
   const imageInputRef = useRef(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [activePreviewItem, setActivePreviewItem] = useState(null);
 
   const [formName, setFormName] = useState('');
-  const [formSeason, setFormSeason] = useState('Демісезон');
-  const [formSize, setFormSize] = useState('');
-  const [formColor, setFormColor] = useState('');
-  const [formMaterial, setFormMaterial] = useState('');
-  const [formLining, setFormLining] = useState('');
+  const [formSeasons, setFormSeasons] = useState(['Демісезон']);
   const [formSole, setFormSole] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formSalePrice, setFormSalePrice] = useState('');
@@ -22,18 +19,14 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
   const [formImage, setFormImage] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSeason, setSelectedSeason] = useState('усі');
+  const [selectedSeasonFilter, setSelectedSeasonFilter] = useState('усі');
 
-  const isColdSeason = ['Зима', 'Осінь', 'Демісезон'].includes(formSeason);
+  const seasonsList = ['Осінь', 'Зима', 'Демісезон', 'Літо'];
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
     setFormName('');
-    setFormSeason('Демісезон');
-    setFormSize('');
-    setFormColor('');
-    setFormMaterial('');
-    setFormLining('');
+    setFormSeasons(['Демісезон']);
     setFormSole('');
     setFormPrice('');
     setFormSalePrice('');
@@ -46,17 +39,35 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     e.stopPropagation();
     setEditingItem(item);
     setFormName(item.name || '');
-    setFormSeason(item.season || 'Демісезон');
-    setFormSize(item.size || '');
-    setFormColor(item.color || '');
-    setFormMaterial(item.material || '');
-    setFormLining(item.lining || '');
+    
+    // Підтримка подвійних сезонів через дефіс (наприклад: "Осінь - Зима")
+    if (item.season) {
+      const parsedSeasons = item.season.split(' - ').map(s => s.trim());
+      setFormSeasons(parsedSeasons);
+    } else {
+      setFormSeasons(['Демісезон']);
+    }
+
     setFormSole(item.sole || '');
-    setFormPrice(item.price !== '' ? item.price : '');
-    setFormSalePrice(item.salePrice !== '' ? item.salePrice : '');
-    setFormCost(item.cost !== '' ? item.cost : '');
+    setFormPrice(item.price !== undefined ? item.price : '');
+    setFormSalePrice(item.salePrice !== undefined ? item.salePrice : '');
+    setFormCost(item.cost !== undefined ? item.cost : '');
     setFormImage(item.image || '');
     setShowModal(true);
+  };
+
+  const toggleSeason = (season) => {
+    if (formSeasons.includes(season)) {
+      if (formSeasons.length === 1) return; // Не дозволяємо знімати останній сезон
+      setFormSeasons(formSeasons.filter(s => s !== season));
+    } else {
+      if (formSeasons.length >= 2) {
+        // Залишаємо максимум 2 сезони
+        setFormSeasons([formSeasons[1], season]);
+      } else {
+        setFormSeasons([...formSeasons, season]);
+      }
+    }
   };
 
   const handleImageUpload = (e) => {
@@ -106,17 +117,14 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     }
 
     const itemId = editingItem ? String(editingItem.id) : String(Date.now());
+    const formattedSeason = formSeasons.join(' - ');
 
     const newItem = {
       id: itemId,
       folderId: 'shoes',
       name: formName,
-      season: formSeason,
-      size: formSize,
-      color: formColor,
-      material: formMaterial,
-      lining: isColdSeason ? formLining : '',
-      sole: isColdSeason ? formSole : '',
+      season: formattedSeason,
+      sole: formSole,
       price: formPrice !== '' ? Number(formPrice) : '',
       salePrice: formSalePrice !== '' ? Number(formSalePrice) : '',
       cost: formCost !== '' ? Number(formCost) : '',
@@ -125,10 +133,8 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
     };
 
     try {
-      // Зберігаємо напряму у Firestore у колекцію 'stock'
       const docRef = doc(db, 'stock', itemId);
       await setDoc(docRef, newItem, { merge: true });
-      console.log("Успішно збережено у колекцію 'stock' під ID:", itemId);
 
       onAddItem(newItem);
       setShowModal(false);
@@ -141,20 +147,19 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
   const shoesList = stock.filter(item => item.folderId === 'shoes' || !item.folderId || item.folderId === 'Взуття');
 
   const filteredShoes = shoesList.filter(item => {
-    const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          item.color?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSeason = selectedSeason === 'усі' || item.season === selectedSeason;
+    const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSeason = selectedSeasonFilter === 'усі' || (item.season && item.season.includes(selectedSeasonFilter));
     return matchesSearch && matchesSeason;
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 touch-manipulation">
       <button 
         type="button"
         onClick={handleOpenAddModal}
         className="w-full py-3 bg-[#0B132B] hover:bg-[#1C2541] text-white rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
       >
-        <Plus size={16} /> Додати взуття
+        <Plus size={16} /> Додати зразок взуття
       </button>
 
       <div className="space-y-2">
@@ -164,19 +169,19 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Пошук за назвою або кольором..."
+            placeholder="Пошук за назвою моделі..."
             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-slate-400"
           />
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {['усі', 'Осінь', 'Зима', 'Демісезон', 'Літо'].map((season) => (
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {['усі', ...seasonsList].map((season) => (
             <button
               key={season}
               type="button"
-              onClick={() => setSelectedSeason(season)}
+              onClick={() => setSelectedSeasonFilter(season)}
               className={`px-3 py-1.5 rounded-xl text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
-                selectedSeason === season 
+                selectedSeasonFilter === season 
                   ? 'bg-slate-900 text-white' 
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
               }`}
@@ -194,7 +199,7 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
           {filteredShoes.map(item => (
             <div 
               key={item.id} 
-              onClick={() => onSelectDetails(item)}
+              onClick={() => setActivePreviewItem(item)}
               className="p-3.5 bg-slate-50 hover:bg-slate-100 cursor-pointer rounded-xl border border-slate-200 flex flex-col gap-2.5 transition relative"
             >
               <div className="flex items-center justify-between gap-2">
@@ -223,17 +228,28 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
 
               <div className="flex gap-3 items-center">
                 {item.image ? (
-                  <img src={item.image} alt="" className="w-14 h-14 object-cover rounded-lg border flex-shrink-0" />
+                  <img src={item.image} alt="" className="w-16 h-16 object-cover rounded-lg border flex-shrink-0" />
                 ) : (
-                  <div className="w-14 h-14 bg-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-500 flex-shrink-0">Фото</div>
+                  <div className="w-16 h-16 bg-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-500 flex-shrink-0">Фото</div>
                 )}
-                <div className="flex-1 flex flex-col text-xs gap-0.5 min-w-0">
-                  {item.season && <span className="text-slate-600">Сезон: <span className="font-medium text-slate-900">{item.season}</span></span>}
-                  {item.size && <span className="text-slate-600">Розмір: <span className="font-medium text-slate-900">{item.size}</span></span>}
-                  {item.color && <span className="text-slate-600">Колір: <span className="font-medium text-slate-900">{item.color}</span></span>}
-                  {item.material && <span className="text-slate-600">Матеріал: <span className="font-medium text-slate-900">{item.material}</span></span>}
-                  {item.lining && <span className="text-slate-600">Утеплювач: <span className="font-medium text-slate-900">{item.lining}</span></span>}
-                  {item.sole && <span className="text-slate-600">Підошва: <span className="font-medium text-slate-900">{item.sole}</span></span>}
+                
+                {/* Лише Сезон, Ціна та Підошва */}
+                <div className="flex-1 flex flex-col text-xs gap-1 min-w-0">
+                  {item.season && (
+                    <span className="text-slate-600">
+                      Сезон: <span className="font-semibold text-slate-900">{item.season}</span>
+                    </span>
+                  )}
+                  {item.price !== undefined && item.price !== '' && (
+                    <span className="text-slate-600">
+                      Ціна: <span className="font-bold text-emerald-700">{item.price} грн</span>
+                    </span>
+                  )}
+                  {item.sole && (
+                    <span className="text-slate-500 text-[11px]">
+                      Підошва: <span className="text-slate-800">{item.sole}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -241,14 +257,71 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
         </div>
       )}
 
+      {/* ЗБІЛЬШЕНИЙ ПЕРЕГЛЯД ПРИ КЛІКУ НА КАРТКУ (Включаючи закупку) */}
+      {activePreviewItem && (
+        <div 
+          onClick={() => setActivePreviewItem(null)}
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all"
+        >
+          <div 
+            onClick={() => setActivePreviewItem(null)}
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5 space-y-4 text-center cursor-pointer transform scale-100 transition-all border border-slate-100"
+          >
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-bold text-slate-900 text-base">{activePreviewItem.name}</h3>
+              <button type="button" className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
+            </div>
+
+            {activePreviewItem.image ? (
+              <img src={activePreviewItem.image} alt="" className="w-full h-56 object-contain rounded-xl bg-slate-50 border border-slate-100" />
+            ) : (
+              <div className="w-full h-40 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-xs">Немає фото</div>
+            )}
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-1.5 text-xs text-left">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Сезон:</span>
+                <span className="font-bold text-slate-900">{activePreviewItem.season || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Ціна продажу:</span>
+                <span className="font-bold text-emerald-600">{activePreviewItem.price ? `${activePreviewItem.price} грн` : '—'}</span>
+              </div>
+              <div className="flex justify-between border-t pt-1.5 border-slate-200">
+                <span className="text-slate-500 font-medium">Закупка (собівартість):</span>
+                <span className="font-extrabold text-slate-900">{activePreviewItem.cost ? `${activePreviewItem.cost} грн` : 'Не вказано'}</span>
+              </div>
+              {activePreviewItem.sole && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Підошва:</span>
+                  <span className="font-medium text-slate-800">{activePreviewItem.sole}</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-400 italic">Натисніть у будь-якому місці, щоб закрити</p>
+          </div>
+        </div>
+      )}
+
+      {/* МОДАЛЬНЕ ВІКНО ДОДАВАННЯ/РЕДАГУВАННЯ (З блокуванням випадкового закриття на мобільному) */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto flex flex-col gap-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold text-slate-900">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+          <div 
+            className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-5 max-h-[92vh] overflow-y-auto flex flex-col gap-4 my-auto relative"
+            style={{ touchAction: 'pan-y' }}
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h2 className="text-base font-bold text-slate-900">
                 {editingItem ? 'Редагувати зразок взуття' : 'Додати зразок взуття'}
               </h2>
-              <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={20}/></button>
+              <button 
+                type="button" 
+                onClick={() => setShowModal(false)} 
+                className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"
+              >
+                <X size={20}/>
+              </button>
             </div>
             
             <form onSubmit={handleSave} className="flex flex-col gap-3">
@@ -259,97 +332,97 @@ export default function ShoesFolder({ stock, onAddItem, onDeleteItem, onSelectDe
                   value={formName} 
                   onChange={e => setFormName(e.target.value)} 
                   required 
-                  className="w-full px-3 py-2 border rounded-xl text-xs" 
-                  placeholder="Напр. Черевики 01" 
+                  className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none focus:border-slate-900" 
+                  placeholder="Напр. Клоги 100" 
                 />
               </div>
+
+              {/* Вибір сезонів (можна до 2 сезонів через дефіс) */}
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Сезон</label>
-                <select
-                  value={formSeason}
-                  onChange={e => setFormSeason(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-xl text-xs bg-white cursor-pointer"
-                >
-                  <option value="Осінь">Осінь</option>
-                  <option value="Зима">Зима</option>
-                  <option value="Демісезон">Демісезон</option>
-                  <option value="Літо">Літо</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Розмір</label>
-                  <input type="text" value={formSize} onChange={e => setFormSize(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. 39" />
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Сезон (можна обрати 1 або 2)
+                </label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {seasonsList.map(s => {
+                    const isSelected = formSeasons.includes(s);
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => toggleSeason(s)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                          isSelected 
+                            ? 'bg-slate-900 text-white border-slate-900' 
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {s} {isSelected && '✓'}
+                      </button>
+                    );
+                  })}
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Колір</label>
-                  <input type="text" value={formColor} onChange={e => setFormColor(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. чорний" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Матеріал</label>
-                <input type="text" value={formMaterial} onChange={e => setFormMaterial(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="Напр. шкіра" />
+                {formSeasons.length > 0 && (
+                  <p className="text-[10px] text-slate-400 mt-1">Обрано: {formSeasons.join(' - ')}</p>
+                )}
               </div>
 
-              {isColdSeason && (
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Вид утеплювача</label>
-                    <div className="flex gap-2">
-                      {['Байка', 'Хутро'].map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => setFormLining(formLining === type ? '' : type)}
-                          className={`px-4 py-1.5 rounded-xl text-xs font-medium border transition cursor-pointer ${
-                            formLining === type 
-                              ? 'bg-slate-900 text-white border-slate-900' 
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Підошва</label>
-                    <input type="text" value={formSole} onChange={e => setFormSole(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs bg-white" placeholder="Напр. трактор" />
-                  </div>
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Підошва (опціонально)</label>
+                <input 
+                  type="text" 
+                  value={formSole} 
+                  onChange={e => setFormSole(e.target.value)} 
+                  className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none focus:border-slate-900" 
+                  placeholder="Напр. резинова / трактор" 
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Ціна продажу (грн)</label>
-                  <input type="number" value={formPrice} onChange={e => setFormPrice(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="0" />
+                  <input 
+                    type="number" 
+                    value={formPrice} 
+                    onChange={e => setFormPrice(e.target.value)} 
+                    className="w-full px-3 py-2 border rounded-xl text-xs font-bold text-emerald-700 focus:outline-none focus:border-slate-900" 
+                    placeholder="0" 
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Акційна ціна (грн)</label>
-                  <input type="number" value={formSalePrice} onChange={e => setFormSalePrice(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="0" />
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Закупка (грн)</label>
+                  <input 
+                    type="number" 
+                    value={formCost} 
+                    onChange={e => setFormCost(e.target.value)} 
+                    className="w-full px-3 py-2 border rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-slate-900" 
+                    placeholder="0" 
+                  />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Закупка (грн)</label>
-                <input type="number" value={formCost} onChange={e => setFormCost(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs" placeholder="0" />
-              </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Фото моделі</label>
-                <input type="file" accept="image/*" ref={imageInputRef} onChange={handleImageUpload} className="text-xs" />
-                {formImage && <p className="text-[10px] text-emerald-600 mt-1">✓ Зображення успішно завантажено та стиснуто</p>}
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  ref={imageInputRef} 
+                  onChange={handleImageUpload} 
+                  className="text-xs w-full" 
+                />
+                {formImage && <p className="text-[10px] text-emerald-600 mt-1">✓ Зображення завантажено</p>}
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t">
                 <button 
                   type="button" 
                   onClick={() => setShowModal(false)} 
-                  className="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 cursor-pointer"
+                  className="px-4 py-2.5 border rounded-xl text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 cursor-pointer"
                 >
                   Скасувати
                 </button>
                 <button 
                   type="submit" 
-                  className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-semibold cursor-pointer hover:bg-slate-800"
                 >
                   Зберегти
                 </button>

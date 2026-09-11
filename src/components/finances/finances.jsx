@@ -72,15 +72,15 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }, 0);
   };
 
-  // 1. Транзакції із замовлень
+  // 1. Транзакції із замовлень (Включаючи закупку парам з наявності)
   const orderTailoringCostTx = orders
-    .filter(o => o.status !== 'З наявності' && !o.stockItemId)
+    .filter(o => Number(o.cost) > 0 || Number(o.price) > 0)
     .map(o => ({
       id: `ord-cost-${o.id}`,
       date: o.date || 'Замовлення',
       type: 'Витрата',
       category: 'Пошиття взуття',
-      comment: o.productTitle || o.name || 'Взуття',
+      comment: `${o.productTitle || o.name || 'Взуття'}${o.status === 'З наявності' ? ' (З наявності)' : ''}`,
       amount: Number(o.cost) || 0,
       isAuto: true
     }));
@@ -149,7 +149,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     ...finances
   ];
 
-  // 2. Групування та персональний розрахунок по КОЖНОМУ ІНВЕСТОРУ
+  // 2. Аналітика інвесторів
   const getInvestorsAnalytics = () => {
     const investorMap = {};
 
@@ -201,10 +201,12 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     else if (selectedFilter === 'коробки') matchesFilter = cat === 'коробки';
     else if (selectedFilter === 'пильовики') matchesFilter = cat === 'пильовики';
     else if (selectedFilter === 'реклама') matchesFilter = cat.includes('реклама');
+    else if (selectedFilter === 'податки') matchesFilter = cat.includes('податк');
+    else if (selectedFilter === 'бухгалтер') matchesFilter = cat.includes('бухгалтер');
     else if (selectedFilter === 'успішно') matchesFilter = cat === 'успішно';
     else if (selectedFilter === 'передплата') matchesFilter = cat === 'передплата';
     else if (selectedFilter === 'інвестиція') matchesFilter = txType.includes('інвестиція');
-    else if (selectedFilter === 'інше') matchesFilter = !['пошиття', 'взуття', 'коробки', 'пильовики', 'реклама', 'успішно', 'передплата'].some(k => cat.includes(k)) && !txType.includes('інвестиція');
+    else if (selectedFilter === 'інше') matchesFilter = !['пошиття', 'взуття', 'коробки', 'пильовики', 'реклама', 'податк', 'бухгалтер', 'успішно', 'передплата'].some(k => cat.includes(k)) && !txType.includes('інвестиція');
 
     return matchesSearch && matchesFilter;
   });
@@ -338,7 +340,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg"><TrendingDown size={16} /></span>
           </div>
           <div className="text-xl font-bold text-slate-900">{totalExpense.toLocaleString('uk-UA')} грн</div>
-          <p className="text-[10px] text-slate-400">Пошиття + коробки + реклама</p>
+          <p className="text-[10px] text-slate-400">Пошиття + податки + реклама тощо</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
@@ -352,7 +354,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
           <p className="text-[10px] text-slate-400">Різниця доходів і витрат</p>
         </div>
 
-        {/* Картка Інвестиції */}
         <div 
           onClick={() => setShowInvestmentsModal(true)}
           className="bg-amber-500/10 hover:bg-amber-500/20 p-4 rounded-2xl border border-amber-300/80 shadow-xs space-y-1 cursor-pointer transition group"
@@ -410,6 +411,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
           <div className="flex gap-1 overflow-x-auto w-full sm:w-auto pb-0.5 scrollbar-none">
             {[
               { id: 'всі', name: 'Усі' },
+              { id: 'податки', name: 'Податки' },
+              { id: 'бухгалтер', name: 'Бухгалтер' },
               { id: 'інвестиція', name: 'Інвестиції' },
               { id: 'взуття', name: 'Пошиття' },
               { id: 'коробки', name: 'Коробки' },
@@ -533,7 +536,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       </div>
 
-      {/* МОДАЛЬНЕ ВІКНО: ДЕТАЛІЗОВАНИЙ РОЗРАХУНОК ПО КОЖНОМУ ІНВЕСТОРУ */}
+      {/* МОДАЛЬНЕ ВІКНО ІНВЕСТОРІВ */}
       {showInvestmentsModal && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
@@ -556,7 +559,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               </button>
             </div>
 
-            {/* Персональні картки інвесторів */}
             <div className="space-y-3">
               {investorsData.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-xs">
@@ -565,7 +567,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               ) : (
                 investorsData.map(inv => (
                   <div key={inv.name} className="bg-amber-50/40 rounded-2xl border border-amber-200/80 p-4 space-y-2.5">
-                    {/* Шапка інвестора */}
                     <div className="flex justify-between items-center pb-1 border-b border-amber-200/50">
                       <span className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
                         <UserCheck size={16} className="text-amber-700" /> {inv.name}
@@ -575,7 +576,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                       </span>
                     </div>
 
-                    {/* Попоказники інвестора */}
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 space-y-0.5">
                         <span className="text-[10px] text-slate-500 font-semibold block">Повернуто інвестору:</span>
@@ -590,7 +590,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                       </div>
                     </div>
 
-                    {/* Таблиця транзакцій даного інвестора */}
                     <div className="pt-1 space-y-1">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Історія внесків та виплат:</span>
                       <div className="space-y-1">
@@ -791,9 +790,11 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-medium"
                   >
+                    <option value="Податки">Податки</option>
+                    <option value="Бухгалтер">Бухгалтер / Послуги</option>
                     <option value="Реклама">Реклама / Таргет</option>
                     <option value="Аксесуари">Аксесуари</option>
-                    <option value="Оренда">Оренда / Послуги</option>
+                    <option value="Оренда">Оренда / Приміщення</option>
                     <option value="Зарплата">Зарплата</option>
                     <option value="Інше">Інша витрата</option>
                   </select>

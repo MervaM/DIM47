@@ -12,6 +12,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [color, setColor] = useState('');
   const [lining, setLining] = useState('');
   
+  // Стейт для збереження характеристик-підказок (placeholders)
+  const [placeholders, setPlaceholders] = useState({
+    size: '',
+    material: '',
+    sole: '',
+    color: ''
+  });
+
   const [clientName, setClientName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
@@ -38,6 +46,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (isOpen) {
       setAdvance('300');
       setSelectedStockItemId(null);
+      setPlaceholders({ size: '', material: '', sole: '', color: '' });
     }
   }, [isOpen]);
 
@@ -74,11 +83,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   };
 
   let paletteStock = currentStock.filter(isColorOrMaterialItem);
-
-  // Виділяємо товари для взуття та наявності
   const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
 
-  // Чітка фільтрація вкладки складу
   const getFilteredStockList = () => {
     if (activeImageType === 'color') return paletteStock;
 
@@ -86,13 +92,10 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       return shoesStock.filter(item => item.folderId === 'shoes' || !item.folderId);
     }
     if (stockFolderFilter === 'availability') {
-      // Підтягуємо всі товари, які відносяться до наявності (status, folderId або мітка зразок/відмова)
       return shoesStock.filter(item => 
         item.folderId === 'availability' || 
-        item.folderId === 'shoes' || 
         item.status === 'відмова' || 
-        item.status === 'зразок' ||
-        !item.folderId
+        item.status === 'зразок'
       );
     }
     return shoesStock;
@@ -162,23 +165,44 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setAdvance(price);
   };
 
+  // Вибір зі спадного списку (dropdown)
   const handleSelectProductFromStock = (product) => {
     if (!product) return;
     setName(product.name || '');
     const prodImg = product.image || product.photo || product.img || product.colorImage;
     if (prodImg) setImage(prodImg);
     
-    if (product.price !== undefined) {
+    if (product.price !== undefined && product.price !== '') {
       setPrice(product.price);
       const numPrice = Number(product.price) || 0;
       setAdvance(numPrice > 300 ? '300' : String(numPrice));
     }
-    if (product.material) setMaterial(product.material);
-    if (product.sole) setSole(product.sole);
-    if (product.color) setColor(product.color);
-    if (product.size) setSize(product.size);
 
-    setSelectedStockItemId(product.id);
+    const isAvailability = product.folderId === 'availability' || product.status === 'відмова';
+
+    if (isAvailability) {
+      // Наявність -> заповнюємо конкретними даними
+      setSize(product.size || '');
+      setMaterial(product.material || '');
+      setSole(product.sole || '');
+      setColor(product.color || '');
+      setSelectedStockItemId(product.id);
+      setPlaceholders({ size: '', material: '', sole: '', color: '' });
+    } else {
+      // Зразок -> ставимо лише підказки (placeholders)
+      setSize('');
+      setMaterial('');
+      setSole('');
+      setColor('');
+      setSelectedStockItemId(null);
+      setPlaceholders({
+        size: product.size || 'Розмір',
+        material: product.material || 'Матеріал',
+        sole: product.sole || 'Підошва',
+        color: product.color || 'Колір'
+      });
+    }
+
     setIsProductDropdownOpen(false);
   };
 
@@ -194,6 +218,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   };
 
+  // Вибір з галереї склада
   const handleSelectImageFromStock = (product) => {
     if (!product) return;
     const imgUrl = product.image || product.photo || product.img || product.colorImage;
@@ -201,17 +226,35 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (activeImageType === 'product') {
       if (imgUrl) setImage(imgUrl);
       if (product.name) setName(product.name);
+      
       if (product.price !== undefined && product.price !== '') {
         setPrice(product.price);
         const numPrice = Number(product.price) || 0;
         setAdvance(numPrice > 300 ? '300' : String(numPrice));
       }
-      if (product.material) setMaterial(product.material);
-      if (product.sole) setSole(product.sole);
-      if (product.color) setColor(product.color);
-      if (product.size) setSize(product.size);
 
-      setSelectedStockItemId(product.id);
+      const isAvailability = product.folderId === 'availability' || product.status === 'відмова';
+
+      if (isAvailability) {
+        setSize(product.size || '');
+        setMaterial(product.material || '');
+        setSole(product.sole || '');
+        setColor(product.color || '');
+        setSelectedStockItemId(product.id);
+        setPlaceholders({ size: '', material: '', sole: '', color: '' });
+      } else {
+        setSize('');
+        setMaterial('');
+        setSole('');
+        setColor('');
+        setSelectedStockItemId(null);
+        setPlaceholders({
+          size: product.size || 'Розмір',
+          material: product.material || 'Матеріал',
+          sole: product.sole || 'Підошва',
+          color: product.color || 'Колір'
+        });
+      }
     } else if (activeImageType === 'color') {
       if (imgUrl) setColorImage(imgUrl);
       if (product.name) setColor(product.name);
@@ -363,9 +406,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                         )}
                         <div>
                           <div className="text-xs font-bold text-slate-900">{prod.name}</div>
-                          <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded">
-                            {prod.size ? `${prod.size} розм.` : ''} {prod.color || ''}
-                          </span>
+                          {prod.folderId === 'availability' && (
+                            <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded">В наявності</span>
+                          )}
                         </div>
                       </div>
                       {prod.price !== undefined && <div className="text-xs font-semibold text-emerald-600">{prod.price} грн</div>}
@@ -376,13 +419,38 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
+          {/* Блок характеристик із підказками (placeholders) */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
             <div className="grid grid-cols-2 gap-2">
-              <input type="text" value={size} onChange={(e) => setSize(e.target.value)} placeholder="Розмір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-              <input type="text" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Матеріал" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-              <input type="text" value={sole} onChange={(e) => setSole(e.target.value)} placeholder="Підошва" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
-              <input type="text" value={color} onChange={(e) => setColor(e.target.value)} placeholder="Колір" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <input 
+                type="text" 
+                value={size} 
+                onChange={(e) => setSize(e.target.value)} 
+                placeholder={placeholders.size || "Розмір"} 
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs placeholder:text-slate-400" 
+              />
+              <input 
+                type="text" 
+                value={material} 
+                onChange={(e) => setMaterial(e.target.value)} 
+                placeholder={placeholders.material || "Матеріал"} 
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs placeholder:text-slate-400" 
+              />
+              <input 
+                type="text" 
+                value={sole} 
+                onChange={(e) => setSole(e.target.value)} 
+                placeholder={placeholders.sole || "Підошва"} 
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs placeholder:text-slate-400" 
+              />
+              <input 
+                type="text" 
+                value={color} 
+                onChange={(e) => setColor(e.target.value)} 
+                placeholder={placeholders.color || "Колір"} 
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs placeholder:text-slate-400" 
+              />
             </div>
 
             <div className="flex items-center justify-end pt-1">
@@ -464,7 +532,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
 
-            {/* Вкладки фільтрації складом */}
             {activeImageType !== 'color' && (
               <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
                 <button

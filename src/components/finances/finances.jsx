@@ -12,7 +12,7 @@ import {
   Edit2, 
   Check, 
   Briefcase,
-  PieChart
+  UserCheck
 } from 'lucide-react';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -33,7 +33,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
   const [editingAmount, setEditingAmount] = useState('');
 
   // Стейт форми додавання
-  const [type, setType] = useState('Витрата'); // Витрата, Дохід, Інвестиція, Повернення інвестиції
+  const [type, setType] = useState('Витрата');
   const [category, setCategory] = useState('Реклама');
   const [amount, setAmount] = useState('');
   const [investorName, setInvestorName] = useState('');
@@ -72,7 +72,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }, 0);
   };
 
-  // 1. Формування транзакцій із замовлень
+  // 1. Транзакції із замовлень
   const orderTailoringCostTx = orders
     .filter(o => o.status !== 'З наявності' && !o.stockItemId)
     .map(o => ({
@@ -149,17 +149,42 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     ...finances
   ];
 
-  // Розрахунок аналітики інвестицій
-  const investmentTxList = finances.filter(t => t.type === 'Інвестиція');
-  const investmentReturnTxList = finances.filter(t => t.type === 'Повернення інвестиції');
+  // 2. Групування та персональний розрахунок по КОЖНОМУ ІНВЕСТОРУ
+  const getInvestorsAnalytics = () => {
+    const investorMap = {};
 
-  const totalInvestmentAmount = investmentTxList.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-  const totalTargetReturnAmount = investmentTxList.reduce((acc, t) => acc + (Number(t.returnAmount) || Number(t.amount) || 0), 0);
-  const totalReturnedAmount = investmentReturnTxList.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-  
-  const totalExpensesSum = allTransactions.filter(t => t.type === 'Витрата').reduce((s, t) => s + t.amount, 0);
-  const remainingInvestmentFunds = totalInvestmentAmount > totalExpensesSum ? totalInvestmentAmount - totalExpensesSum : 0;
-  const remainingReturnDebt = totalTargetReturnAmount - totalReturnedAmount;
+    finances.forEach(tx => {
+      if (tx.type === 'Інвестиція' || tx.type === 'Повернення інвестиції') {
+        const name = (tx.investorName || tx.comment || 'Інвестор').trim();
+        if (!investorMap[name]) {
+          investorMap[name] = {
+            name,
+            totalInvested: 0,
+            targetReturn: 0,
+            returned: 0,
+            transactions: []
+          };
+        }
+
+        investorMap[name].transactions.push(tx);
+
+        if (tx.type === 'Інвестиція') {
+          investorMap[name].totalInvested += Number(tx.amount) || 0;
+          investorMap[name].targetReturn += Number(tx.returnAmount || tx.amount) || 0;
+        } else if (tx.type === 'Повернення інвестиції') {
+          investorMap[name].returned += Number(tx.amount) || 0;
+        }
+      }
+    });
+
+    return Object.values(investorMap).map(inv => ({
+      ...inv,
+      debtRemaining: inv.targetReturn - inv.returned
+    }));
+  };
+
+  const investorsData = getInvestorsAnalytics();
+  const grandTotalInvested = investorsData.reduce((s, i) => s + i.totalInvested, 0);
 
   // Фільтрація операцій
   const filteredTransactions = allTransactions.filter(tx => {
@@ -197,7 +222,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
   const adsStats = calculateCategoryStats('реклама');
 
   const totalIncome = allTransactions.filter(t => t.type === 'Дохід').reduce((s, t) => s + t.amount, 0);
-  const totalExpense = totalExpensesSum;
+  const totalExpense = allTransactions.filter(t => t.type === 'Витрата').reduce((s, t) => s + t.amount, 0);
   const netProfit = totalIncome - totalExpense;
 
   const handleAddTransaction = async (e) => {
@@ -327,7 +352,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
           <p className="text-[10px] text-slate-400">Різниця доходів і витрат</p>
         </div>
 
-        {/* Окрема картка "Інвестиції" */}
+        {/* Картка Інвестиції */}
         <div 
           onClick={() => setShowInvestmentsModal(true)}
           className="bg-amber-500/10 hover:bg-amber-500/20 p-4 rounded-2xl border border-amber-300/80 shadow-xs space-y-1 cursor-pointer transition group"
@@ -338,8 +363,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               <Briefcase size={16} />
             </span>
           </div>
-          <div className="text-xl font-black text-amber-950">{totalInvestmentAmount.toLocaleString('uk-UA')} грн</div>
-          <p className="text-[10px] font-semibold text-amber-800">Клацніть для деталей і залишків →</p>
+          <div className="text-xl font-black text-amber-950">{grandTotalInvested.toLocaleString('uk-UA')} грн</div>
+          <p className="text-[10px] font-semibold text-amber-800">Картки по інвесторах →</p>
         </div>
       </div>
 
@@ -508,7 +533,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       </div>
 
-      {/* МОДАЛЬНЕ ВІКНО ДЕТАЛЕЙ ІНВЕСТИЦІЙ */}
+      {/* МОДАЛЬНЕ ВІКНО: ДЕТАЛІЗОВАНИЙ РОЗРАХУНОК ПО КОЖНОМУ ІНВЕСТОРУ */}
       {showInvestmentsModal && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
@@ -520,7 +545,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
           >
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h3 className="font-bold text-amber-950 text-base flex items-center gap-2">
-                <Briefcase size={18} className="text-amber-600" /> Фінансовий аналіз інвестицій
+                <Briefcase size={18} className="text-amber-600" /> Облік залучених інвестицій
               </h3>
               <button 
                 type="button" 
@@ -531,48 +556,86 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               </button>
             </div>
 
-            {/* Каркас підсумків інвестицій */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-3 bg-amber-50/60 rounded-2xl border border-amber-200/60 space-y-1">
-                <span className="text-slate-500 font-medium block">Загалом інвестовано:</span>
-                <span className="text-base font-black text-slate-900">{totalInvestmentAmount.toLocaleString('uk-UA')} грн</span>
-              </div>
-              <div className="p-3 bg-rose-50/60 rounded-2xl border border-rose-200/60 space-y-1">
-                <span className="text-slate-500 font-medium block">Вже потрачені кошти:</span>
-                <span className="text-base font-black text-rose-700">{totalExpensesSum.toLocaleString('uk-UA')} грн</span>
-              </div>
-              <div className="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200/60 space-y-1">
-                <span className="text-slate-500 font-medium block">Залишок інвест-коштів:</span>
-                <span className="text-base font-black text-emerald-700">{remainingInvestmentFunds.toLocaleString('uk-UA')} грн</span>
-              </div>
-              <div className="p-3 bg-purple-50/60 rounded-2xl border border-purple-200/60 space-y-1">
-                <span className="text-slate-500 font-medium block">Залишок до повернення:</span>
-                <span className="text-base font-black text-purple-900">{remainingReturnDebt.toLocaleString('uk-UA')} грн</span>
-              </div>
-            </div>
-
-            {/* Список інвесторів та їх внесків */}
-            <div className="space-y-2 pt-2">
-              <span className="text-xs font-bold text-slate-700">Список інвестицій та інвесторів:</span>
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {investmentTxList.length === 0 ? (
-                  <p className="text-center py-6 text-slate-400 text-xs">Жодної інвестиції ще не додано</p>
-                ) : (
-                  investmentTxList.map(tx => (
-                    <div key={tx.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs space-y-1">
-                      <div className="flex justify-between items-center font-bold text-slate-900">
-                        <span>Інвестор: {tx.investorName || 'Не вказано'}</span>
-                        <span className="text-amber-700 font-extrabold">+{tx.amount} грн</span>
-                      </div>
-                      <div className="flex justify-between text-[11px] text-slate-500">
-                        <span>Треба повернути: {tx.returnAmount || tx.amount} грн</span>
-                        <span>Дата: {tx.date}</span>
-                      </div>
-                      {tx.comment && <div className="text-[10px] text-slate-400 pt-0.5">{tx.comment}</div>}
+            {/* Персональні картки інвесторів */}
+            <div className="space-y-3">
+              {investorsData.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  Жодного інвестора ще не заведено. Скористайтеся кнопкою «+ Додати транзакцію» та оберіть тип «Інвестиція».
+                </div>
+              ) : (
+                investorsData.map(inv => (
+                  <div key={inv.name} className="bg-amber-50/40 rounded-2xl border border-amber-200/80 p-4 space-y-2.5">
+                    {/* Шапка інвестора */}
+                    <div className="flex justify-between items-center pb-1 border-b border-amber-200/50">
+                      <span className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                        <UserCheck size={16} className="text-amber-700" /> {inv.name}
+                      </span>
+                      <span className="text-xs font-black text-amber-900 bg-amber-200/50 px-2.5 py-0.5 rounded-full">
+                        Внесено: {inv.totalInvested.toLocaleString('uk-UA')} грн
+                      </span>
                     </div>
-                  ))
-                )}
-              </div>
+
+                    {/* Попоказники інвестора */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 space-y-0.5">
+                        <span className="text-[10px] text-slate-500 font-semibold block">Повернуто інвестору:</span>
+                        <span className="text-sm font-bold text-emerald-600">{inv.returned.toLocaleString('uk-UA')} грн</span>
+                      </div>
+
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 space-y-0.5">
+                        <span className="text-[10px] text-slate-500 font-semibold block">Залишок до повернення:</span>
+                        <span className={`text-sm font-bold ${inv.debtRemaining > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {inv.debtRemaining.toLocaleString('uk-UA')} грн
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Таблиця транзакцій даного інвестора */}
+                    <div className="pt-1 space-y-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Історія внесків та виплат:</span>
+                      <div className="space-y-1">
+                        {inv.transactions.map(t => (
+                          <div key={t.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100 text-[11px]">
+                            <div className="space-y-0.5">
+                              <span className="font-semibold text-slate-800">{t.type}</span>
+                              <div className="text-[9px] text-slate-400">{t.date}</div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {editingTxId === t.id ? (
+                                <div className="flex items-center gap-1">
+                                  <input 
+                                    type="number" 
+                                    value={editingAmount}
+                                    onChange={(e) => setEditingAmount(e.target.value)}
+                                    className="w-14 px-1 py-0.5 border rounded text-[10px]"
+                                    autoFocus
+                                  />
+                                  <button onClick={() => handleSaveEditedAmount(t)} className="text-emerald-600 p-0.5"><Check size={12} /></button>
+                                  <button onClick={() => setEditingTxId(null)} className="text-slate-400 p-0.5"><X size={12} /></button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 font-bold">
+                                  <span className={t.type === 'Інвестиція' ? 'text-amber-700' : 'text-emerald-600'}>
+                                    {t.type === 'Інвестиція' ? '+' : '-'}{t.amount} грн
+                                  </span>
+                                  <button 
+                                    onClick={() => { setEditingTxId(t.id); setEditingAmount(t.amount); }}
+                                    className="text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer"
+                                    title="Редагувати"
+                                  >
+                                    <Edit2 size={11} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -669,7 +732,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                 </select>
               </div>
 
-              {type === 'Інвестиція' && (
+              {(type === 'Інвестиція' || type === 'Повернення інвестиції') && (
                 <div className="space-y-2 p-2.5 bg-amber-50/60 rounded-xl border border-amber-200/80">
                   <div>
                     <label className="block font-medium text-amber-900 mb-1">Ім'я інвестора</label>
@@ -682,16 +745,18 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                       className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-slate-900 font-semibold focus:outline-none"
                     />
                   </div>
-                  <div>
-                    <label className="block font-medium text-amber-900 mb-1">Сума до повернення (грн)</label>
-                    <input 
-                      type="number" 
-                      value={returnAmount}
-                      onChange={(e) => setReturnAmount(e.target.value)}
-                      placeholder="Сума боргу/повернення"
-                      className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-slate-900 font-semibold focus:outline-none"
-                    />
-                  </div>
+                  {type === 'Інвестиція' && (
+                    <div>
+                      <label className="block font-medium text-amber-900 mb-1">Сума до повернення (грн)</label>
+                      <input 
+                        type="number" 
+                        value={returnAmount}
+                        onChange={(e) => setReturnAmount(e.target.value)}
+                        placeholder="Сума боргу/повернення"
+                        className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-slate-900 font-semibold focus:outline-none"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -718,7 +783,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                 </div>
               </div>
 
-              {type !== 'Інвестиція' && (
+              {type !== 'Інвестиція' && type !== 'Повернення інвестиції' && (
                 <div>
                   <label className="block font-medium text-slate-600 mb-1">Категорія</label>
                   <select

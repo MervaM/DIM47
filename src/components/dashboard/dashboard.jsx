@@ -19,7 +19,8 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
 
-  const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Успішно', 'Відмова'];
+  // 1. Додано статус "Повернення"
+  const statuses = ['Всі', 'Нове', 'В роботі', 'Доставка', 'Успішно', 'Відмова', 'Повернення'];
 
   useEffect(() => {
     fetchOrders();
@@ -45,7 +46,7 @@ export default function Dashboard() {
   };
 
   const sortOrdersList = (ordersArray) => {
-    const isCompleted = (status) => status === 'Доставка' || status === 'Успішно' || status === 'Відмова';
+    const isCompleted = (status) => status === 'Доставка' || status === 'Успішно' || status === 'Відмова' || status === 'Повернення';
 
     return [...ordersArray].sort((a, b) => {
       const compA = isCompleted(a.status);
@@ -106,6 +107,7 @@ export default function Dashboard() {
           image: item.productImage || item.image || '',
           colorImage: item.colorImage || '',
           createdAt: item.createdAt || '',
+          stockItemId: item.stockItemId || '',
           productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color || ''}, ${item.material || ''}, ${item.filling || item.sole || ''}`
         });
       });
@@ -129,7 +131,6 @@ export default function Dashboard() {
     setShowNewOrderModal(true);
   };
 
-  // Швидке збереження змін прямо з картки (ПІБ, телефон, ТТН, ціна тощо)
   const handleInlineSaveOrder = async (updatedOrder) => {
     try {
       const orderRef = doc(db, "orders", updatedOrder.id);
@@ -177,8 +178,15 @@ export default function Dashboard() {
         price: Number(orderData.price) || 0,
         productImage: orderData.image || '',
         colorImage: orderData.colorImage || '',
+        stockItemId: orderData.stockItemId || '',
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
+
+      // 2. Якщо вибрано товар із наявності — видаляємо його з папки "availability"
+      if (orderData.stockItemId && orderData.folderId === 'availability') {
+        await deleteDoc(doc(db, "stock", orderData.stockItemId));
+        await fetchStockProducts();
+      }
 
       if (editingId) {
         const orderRef = doc(db, "orders", editingId);
@@ -214,10 +222,31 @@ export default function Dashboard() {
     }
   };
 
+  // 3. Автоматична логіка статусу "Повернення"
   const handleStatusChange = async (id, newStatus) => {
     try {
       const orderRef = doc(db, "orders", id);
+      const targetOrder = orders.find(o => o.id === id);
+
       await updateDoc(orderRef, { status: newStatus });
+
+      // Якщо обрано статус "Повернення", повертаємо товар у папку "availability"
+      if (newStatus === 'Повернення' && targetOrder) {
+        await addDoc(collection(db, "stock"), {
+          folderId: 'availability',
+          name: targetOrder.productTitle || targetOrder.name || 'Товар з повернення',
+          size: targetOrder.size || '',
+          color: targetOrder.colorText || targetOrder.color || '',
+          material: targetOrder.material || '',
+          sole: targetOrder.sole || '',
+          price: Number(targetOrder.price) || 0,
+          status: 'відмова',
+          image: targetOrder.image || '',
+          createdAt: new Date().toISOString()
+        });
+
+        await fetchStockProducts();
+      }
       
       setOrders(prevOrders => {
         const updated = prevOrders.map(o => o.id === id ? { ...o, status: newStatus } : o);

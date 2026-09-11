@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [name, setName] = useState('');
@@ -11,7 +13,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [sole, setSole] = useState('');
   const [color, setColor] = useState('');
   const [lining, setLining] = useState('');
-  
+  const [supplier, setSupplier] = useState('Міла');
+
   const [placeholders, setPlaceholders] = useState({
     size: '',
     material: '',
@@ -46,6 +49,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setAdvance('300');
       setSelectedStockItemId(null);
       setStockFolderFilter('shoes');
+      setSupplier('Міла');
       setPlaceholders({ size: '', material: '', sole: '', color: '' });
     }
   }, [isOpen]);
@@ -154,6 +158,15 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setAdvance(numPrice > 300 ? '300' : String(numPrice));
     }
 
+    // Авто-підтягування виробника моделі
+    if (product.defaultSupplier) {
+      setSupplier(product.defaultSupplier);
+    } else if (Array.isArray(product.suppliers) && product.suppliers.length > 0) {
+      setSupplier(product.suppliers[0]);
+    } else if (product.supplier) {
+      setSupplier(product.supplier);
+    }
+
     const isAvailability = product.folderId === 'availability';
 
     if (isAvailability) {
@@ -206,6 +219,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         setAdvance(numPrice > 300 ? '300' : String(numPrice));
       }
 
+      if (product.defaultSupplier) {
+        setSupplier(product.defaultSupplier);
+      } else if (Array.isArray(product.suppliers) && product.suppliers.length > 0) {
+        setSupplier(product.suppliers[0]);
+      }
+
       const isAvailability = product.folderId === 'availability';
 
       if (isAvailability) {
@@ -236,7 +255,50 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setIsStockImagesOpen(false);
   };
 
-  const handleSubmit = (e) => {
+  // Автоматичне списання залишків пакування у обраного виробника
+  const deductPackagingForSupplier = async (chosenSupplier) => {
+    try {
+      // Списуємо велику коробку і великий пильовик (або перші знайдені)
+      const boxItem = stock.find(i => i.folderId === 'boxes');
+      const dustbagItem = stock.find(i => i.folderId === 'dustbags');
+
+      if (boxItem) {
+        const boxRef = doc(db, 'stock', String(boxItem.id));
+        const boxSnap = await getDoc(boxRef);
+        if (boxSnap.exists()) {
+          const data = boxSnap.data();
+          const currentSuppliers = data.suppliers || { 'Міла': data.quantity || 0, 'Валерій': 0 };
+          const currentQty = Number(currentSuppliers[chosenSupplier]) || 0;
+          
+          if (currentQty > 0) {
+            currentSuppliers[chosenSupplier] = currentQty - 1;
+            const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
+            await updateDoc(boxRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+          }
+        }
+      }
+
+      if (dustbagItem) {
+        const dustRef = doc(db, 'stock', String(dustbagItem.id));
+        const dustSnap = await getDoc(dustRef);
+        if (dustSnap.exists()) {
+          const data = dustSnap.data();
+          const currentSuppliers = data.suppliers || { 'Міла': data.quantity || 0, 'Валерій': 0 };
+          const currentQty = Number(currentSuppliers[chosenSupplier]) || 0;
+          
+          if (currentQty > 0) {
+            currentSuppliers[chosenSupplier] = currentQty - 1;
+            const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
+            await updateDoc(dustRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Помилка списання пакування:', err);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newOrder = {
       id: Date.now(),
@@ -248,6 +310,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       sole,
       color,
       lining,
+      supplier,
       clientName,
       phone,
       city,
@@ -261,6 +324,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       status: 'нове',
       createdAt: new Date().toISOString()
     };
+
+    // Списуємо пакування у того виробника, який обраний для замовлення
+    await deductPackagingForSupplier(supplier);
 
     if (typeof onSave === 'function') {
       onSave(newOrder);
@@ -392,6 +458,19 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
+          {/* Поле Виробник / Постачальник */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-600">Виробник (хто відшиває)</label>
+            <select
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+              className="w-full px-3 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 cursor-pointer focus:outline-none"
+            >
+              <option value="Міла">Міла</option>
+              <option value="Валерій">Валерій</option>
+            </select>
+          </div>
+
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-600">Характеристики товару:</label>
             <div className="grid grid-cols-2 gap-2">
@@ -436,7 +515,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
           <div className="space-y-1 pt-2 border-t border-slate-100">
             <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
               <Wand2 size={14} className="text-amber-600" />
-              Розумне введення даних клієнта (скопіюйте текст сюди)
+              Розумне введення даних клієнта
             </label>
             <textarea
               rows="2"

@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, X, Image as ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ImageIcon } from 'lucide-react';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
 
-export default function BoxesFolder({ stock, onAddItem, onDeleteItem }) {
+export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDeleteItem = () => {} }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   
   const [formData, setFormData] = useState({
-    name: '',
     sizeBox: 'Великі',
-    quantity: '',
     cost: '',
-    image: ''
+    image: '',
+    milaQty: '',
+    valeriyQty: ''
   });
 
   const boxesList = stock.filter(item => item.folderId === 'boxes');
@@ -19,20 +21,20 @@ export default function BoxesFolder({ stock, onAddItem, onDeleteItem }) {
     if (item) {
       setEditingItem(item);
       setFormData({
-        name: item.name || '',
         sizeBox: item.sizeBox || 'Великі',
-        quantity: item.quantity || '',
         cost: item.cost || '',
-        image: item.image || ''
+        image: item.image || '',
+        milaQty: item.suppliers?.['Міла'] !== undefined ? item.suppliers['Міла'] : (item.quantity || 0),
+        valeriyQty: item.suppliers?.['Валерій'] !== undefined ? item.suppliers['Валерій'] : 0
       });
     } else {
       setEditingItem(null);
       setFormData({
-        name: '',
         sizeBox: 'Великі',
-        quantity: '',
         cost: '',
-        image: ''
+        image: '',
+        milaQty: '',
+        valeriyQty: ''
       });
     }
     setIsModalOpen(true);
@@ -49,24 +51,39 @@ export default function BoxesFolder({ stock, onAddItem, onDeleteItem }) {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    const itemId = editingItem ? editingItem.id : Date.now().toString();
+    const mila = Number(formData.milaQty) || 0;
+    const valeriy = Number(formData.valeriyQty) || 0;
+    const totalQty = mila + valeriy;
+
     const newItem = {
-      id: editingItem ? editingItem.id : Date.now().toString(),
+      id: itemId,
       folderId: 'boxes',
       name: `Коробки (${formData.sizeBox})`,
       sizeBox: formData.sizeBox,
-      quantity: Number(formData.quantity) || 0,
+      quantity: totalQty,
       cost: Number(formData.cost) || 0,
-      image: formData.image
+      image: formData.image,
+      suppliers: {
+        'Міла': mila,
+        'Валерій': valeriy
+      }
     };
-    onAddItem(newItem);
-    setIsModalOpen(false);
+
+    try {
+      const docRef = doc(db, 'stock', itemId);
+      await setDoc(docRef, newItem, { merge: true });
+      onAddItem(newItem);
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('Помилка збереження коробок:', err);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Кнопка додавання на всю ширину, по центру */}
       <div className="flex justify-center">
         <button
           onClick={() => handleOpenModal()}
@@ -76,63 +93,77 @@ export default function BoxesFolder({ stock, onAddItem, onDeleteItem }) {
         </button>
       </div>
 
-      {/* Список карток коробок */}
       <div className="space-y-3">
         {boxesList.length === 0 ? (
           <p className="text-center text-xs text-slate-400 py-6">Ще немає доданих коробок</p>
         ) : (
-          boxesList.map(item => (
-            <div 
-              key={item.id} 
-              className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-col gap-3 hover:border-slate-200 transition"
-            >
-              {/* Верхній рядок: назва зліва, іконки справа в один рядок із мінімальним відступом */}
-              <div className="flex items-center justify-between">
-                <div className="font-bold text-slate-900 text-sm">
-                  Коробки ({item.sizeBox})
-                </div>
-                <div className="flex items-center gap-0.5">
-                  <button 
-                    onClick={() => handleOpenModal(item)}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition cursor-pointer"
-                  >
-                    <Pencil size={16} />
-                  </button>
-                  <button 
-                    onClick={() => onDeleteItem(item.id)}
-                    className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
+          boxesList.map(item => {
+            const milaQty = item.suppliers?.['Міла'] ?? item.quantity ?? 0;
+            const valeriyQty = item.suppliers?.['Валерій'] ?? 0;
+            const totalQty = (Number(milaQty) || 0) + (Number(valeriyQty) || 0);
 
-              {/* Основний блок: фото зліва, дані праворуч */}
-              <div className="flex items-center gap-4">
-                {item.image ? (
-                  <img src={item.image} alt="" className="w-16 h-16 object-cover rounded-xl border border-slate-100 flex-shrink-0" />
-                ) : (
-                  <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center text-[11px] text-slate-400 flex-shrink-0">
-                    Фото
+            return (
+              <div 
+                key={item.id} 
+                className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-col gap-3 hover:border-slate-200 transition"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-slate-900 text-sm">
+                    Коробки ({item.sizeBox})
                   </div>
-                )}
-                <div className="flex flex-col text-xs space-y-1">
-                  <div className="text-slate-600">
-                    Кількість: <span className="font-semibold text-slate-900">{item.quantity} шт</span>
+                  <div className="flex items-center gap-0.5">
+                    <button 
+                      onClick={() => handleOpenModal(item)}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition cursor-pointer"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button 
+                      onClick={() => onDeleteItem(item.id)}
+                      className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  {item.cost > 0 && (
-                    <div className="text-slate-600">
-                      Собівартість: <span className="font-semibold text-slate-900">{item.cost} грн</span>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  {item.image ? (
+                    <img src={item.image} alt="" className="w-16 h-16 object-cover rounded-xl border border-slate-100 flex-shrink-0" />
+                  ) : (
+                    <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center text-[11px] text-slate-400 flex-shrink-0">
+                      Фото
                     </div>
                   )}
+                  <div className="flex flex-col text-xs space-y-1">
+                    <div className="text-slate-600">
+                      Загальна кількість: <span className="font-bold text-slate-900">{totalQty} шт</span>
+                    </div>
+                    
+                    {/* Розподіл по постачальниках */}
+                    <div className="flex gap-2 text-[11px] pt-1">
+                      <span className="bg-indigo-50 text-indigo-800 font-semibold px-2 py-0.5 rounded-md border border-indigo-100">
+                        Міла: {milaQty} шт
+                      </span>
+                      <span className="bg-purple-50 text-purple-800 font-semibold px-2 py-0.5 rounded-md border border-purple-100">
+                        Валерій: {valeriyQty} шт
+                      </span>
+                    </div>
+
+                    {item.cost > 0 && (
+                      <div className="text-slate-500 text-[10px] pt-0.5">
+                        Собівартість: <span className="font-semibold text-slate-800">{item.cost} грн</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
-      {/* Модальне вікно додавання / редагування */}
+      {/* Модальне вікно */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 flex flex-col gap-4 relative">
@@ -147,13 +178,13 @@ export default function BoxesFolder({ stock, onAddItem, onDeleteItem }) {
               {editingItem ? 'Редагувати коробку' : 'Додати коробку'}
             </h3>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Розмір коробки</label>
                 <select
                   value={formData.sizeBox}
                   onChange={(e) => setFormData(prev => ({ ...prev, sizeBox: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-slate-400"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none"
                 >
                   <option value="Великі">Великі</option>
                   <option value="Середні">Середні</option>
@@ -161,16 +192,31 @@ export default function BoxesFolder({ stock, onAddItem, onDeleteItem }) {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Кількість (шт)</label>
-                <input
-                  type="number"
-                  required
-                  value={formData.quantity}
-                  onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
-                  placeholder="Введіть кількість"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-slate-400"
-                />
+              {/* Розподіл залишків */}
+              <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-2">
+                <span className="text-[11px] font-bold text-indigo-900 block">Кількість у виробників (шт):</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Міла</label>
+                    <input
+                      type="number"
+                      value={formData.milaQty}
+                      onChange={(e) => setFormData(prev => ({ ...prev, milaQty: e.target.value }))}
+                      placeholder="0"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Валерій</label>
+                    <input
+                      type="number"
+                      value={formData.valeriyQty}
+                      onChange={(e) => setFormData(prev => ({ ...prev, valeriyQty: e.target.value }))}
+                      placeholder="0"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -180,7 +226,7 @@ export default function BoxesFolder({ stock, onAddItem, onDeleteItem }) {
                   value={formData.cost}
                   onChange={(e) => setFormData(prev => ({ ...prev, cost: e.target.value }))}
                   placeholder="Введіть собівартість"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-slate-400"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900"
                 />
               </div>
 
@@ -190,7 +236,7 @@ export default function BoxesFolder({ stock, onAddItem, onDeleteItem }) {
                   {formData.image && (
                     <img src={formData.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200" />
                   )}
-                  <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 cursor-pointer transition">
+                  <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 cursor-pointer transition">
                     <ImageIcon size={16} /> Обрати фото
                     <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
                   </label>
@@ -201,13 +247,13 @@ export default function BoxesFolder({ stock, onAddItem, onDeleteItem }) {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
                 >
                   Скасувати
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer transition"
+                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer"
                 >
                   Зберегти
                 </button>

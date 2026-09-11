@@ -19,7 +19,6 @@ export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState('Всі');
   const [loading, setLoading] = useState(true);
 
-  // Список статусів включно зі статусом "З наявності"
   const statuses = ['Всі', 'Нове', 'В роботі', 'З наявності', 'Доставка', 'Успішно', 'Відмова'];
 
   useEffect(() => {
@@ -104,6 +103,8 @@ export default function Dashboard() {
           sole: item.sole || '',
           filling: item.filling || item.lining || '',
           price: item.price !== undefined ? item.price : 0,
+          salePrice: item.salePrice || '',
+          cost: item.cost || '',
           image: item.productImage || item.image || '',
           colorImage: item.colorImage || '',
           createdAt: item.createdAt || '',
@@ -159,7 +160,6 @@ export default function Dashboard() {
 
   const handleSaveOrder = async (orderData) => {
     try {
-      // Якщо товар із папки "Наявність" (є stockItemId) — початковий статус "З наявності", інакше "Нове"
       const initialStatus = orderData.stockItemId ? 'З наявності' : 'Нове';
 
       const dbPayload = {
@@ -185,7 +185,6 @@ export default function Dashboard() {
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
 
-      // Видаляємо товар з папки "Наявність" після додавання в замовлення
       if (orderData.stockItemId) {
         await deleteDoc(doc(db, "stock", orderData.stockItemId));
         await fetchStockProducts();
@@ -213,7 +212,6 @@ export default function Dashboard() {
     }
   };
 
-  // Видалення замовлення та повернення товару в "Наявність", якщо статус було "З наявності"
   const handleDeleteOrder = async (id) => {
     if (!window.confirm('Ви впевнені, що хочете видалити це замовлення?')) return;
 
@@ -221,7 +219,6 @@ export default function Dashboard() {
       const orderToDelete = orders.find(o => o.id === id);
 
       if (orderToDelete) {
-        // Якщо картка мала статус "З наявності" або збережений stockItemId
         if (orderToDelete.status === 'З наявності' || orderToDelete.stockItemId) {
           await addDoc(collection(db, "stock"), {
             folderId: 'availability',
@@ -260,13 +257,17 @@ export default function Dashboard() {
         await addDoc(collection(db, "stock"), {
           folderId: 'availability',
           name: targetOrder.productTitle || targetOrder.name || 'Товар з відмови',
+          season: targetOrder.season || 'Демісезон',
           size: targetOrder.size || '',
           color: targetOrder.colorText || targetOrder.color || '',
           material: targetOrder.material || '',
           sole: targetOrder.sole || '',
+          lining: targetOrder.filling || targetOrder.lining || '',
           price: Number(targetOrder.price) || 0,
+          salePrice: Number(targetOrder.salePrice) || '',
+          cost: Number(targetOrder.cost) || '',
           status: 'відмова',
-          image: targetOrder.image || '',
+          image: targetOrder.image || targetOrder.productImage || '',
           createdAt: new Date().toISOString()
         });
 
@@ -279,6 +280,7 @@ export default function Dashboard() {
       });
     } catch (error) {
       console.error('Помилка зміни статусу:', error);
+      alert('Не вдалося оновити статус замовлення');
     }
   };
 

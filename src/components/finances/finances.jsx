@@ -52,7 +52,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
   };
 
   // 1. Формування транзакцій із замовлень
-  // Витрата на пошиття рахується для ВСІХ нових замовлень, ОКРІМ тих, що взяті з "Наявності"
+  // Витрата на пошиття за ЗАКУПОЧНОЮ ціною (cost), у коментарі — тільки назва взуття
   const orderTailoringCostTx = orders
     .filter(o => o.status !== 'З наявності' && !o.stockItemId)
     .map(o => ({
@@ -60,8 +60,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       date: o.date || 'Замовлення',
       type: 'Витрата',
       category: 'Пошиття взуття',
-      comment: `Собівартість пошиття: ${o.productTitle || o.name || 'Взуття'} (${o.size || '—'} розм.)`,
-      amount: Number(o.cost) || Number(o.price) || 0,
+      comment: o.productTitle || o.name || 'Взуття',
+      amount: Number(o.cost) || 0,
       isAuto: true
     }));
 
@@ -73,7 +73,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       date: o.date || 'Замовлення',
       type: 'Дохід',
       category: 'Успішно',
-      comment: `Оплата замовлення: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
+      comment: `Оплата: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
       amount: Number(o.price) || 0,
       isAuto: true
     }));
@@ -261,7 +261,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       </div>
 
-      {/* Зменшені 4 компактні картки аналітики */}
+      {/* 4 компактні картки аналітики */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
           { key: 'коробки', title: 'Коробки', stats: boxesStats, color: 'border-amber-200 bg-amber-50/30 hover:bg-amber-50/60' },
@@ -286,7 +286,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         ))}
       </div>
 
-      {/* Пошук та Кнопкові фільтри */}
+      {/* Пошук та Фільтри */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 space-y-3">
         <div className="flex flex-col sm:flex-row gap-2 justify-between items-center">
           <div className="relative w-full sm:w-64">
@@ -325,7 +325,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
           </div>
         </div>
 
-        {/* Таблиця історія фінансових операцій */}
+        {/* Таблиця фінансових операцій */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>

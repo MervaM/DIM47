@@ -60,7 +60,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setSelectedStockItemId(null);
       setStockFolderFilter('shoes');
       setSupplier('Міла');
-      setPackagingSource('Міла'); // За замовчуванням склад виробника
+      setPackagingSource('Міла'); 
       setIncludeBox(true);
       setIncludeDustbag(true);
       setPaletteMaterialTab('Шкіра');
@@ -282,14 +282,20 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         });
       }
     } else if (activeImageType === 'color') {
+      // Автопідтягування зображення, назви та матеріалу з палітри
       if (imgUrl) setColorImage(imgUrl);
       if (product.name) setColor(product.name);
+      
+      // Автоматичне підтягування матеріалу (Шкіра / Замша)
+      const detectedMaterial = product.materialType || paletteMaterialTab;
+      if (detectedMaterial) {
+        setMaterial(detectedMaterial);
+      }
     }
     
     setIsStockImagesOpen(false);
   };
 
-  // Списання пакування з урахуванням вибору (коробка/пильовик окремо)
   const deductPackaging = async (source, needBox, needDustbag) => {
     if (!needBox && !needDustbag) return;
     const targetSource = source || 'Міла';

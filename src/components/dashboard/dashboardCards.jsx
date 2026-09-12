@@ -54,9 +54,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
       {orders.map((order) => {
         const remainingPayment = (Number(order.price) || 0) - (Number(order.advance) || 0);
         const isEditingTtn = editingTtnId === order.id;
-        
-        // Визначаємо виробника для виводу
-        const currentSupplier = order.supplier || order.manufacturer || order.packagingSource || 'Міла';
 
         return (
           <div 
@@ -79,10 +76,12 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   ))}
                 </select>
 
-                {/* Бейдж виробника зверху картки (тепер точно відображається) */}
-                <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-2xs">
-                  Виробник: {currentSupplier}
-                </span>
+                {/* Бейдж виробника (відображає саме обраного при створенні виробника) */}
+                {order.supplier && (
+                  <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-2xs">
+                    Виробник: {order.supplier}
+                  </span>
+                )}
 
                 <div className="flex items-center gap-1">
                   <button

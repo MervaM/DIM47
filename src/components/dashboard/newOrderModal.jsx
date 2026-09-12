@@ -16,13 +16,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   
   // Виробник та Джерело пакування
   const [supplier, setSupplier] = useState('Міла');
-  const [packagingSource, setPackagingSource] = useState('Основний склад');
+  const [packagingSource, setPackagingSource] = useState('Міла');
 
-  // Опції пакування
+  // Опції пакування (коробка / пильовик)
   const [includeBox, setIncludeBox] = useState(true);
   const [includeDustbag, setIncludeDustbag] = useState(true);
 
-  // Фікація вибраної вкладки матеріалу в модаці палітри
+  // Фіксація матеріалу для вибору палітри відповідно до виробника
   const [paletteMaterialTab, setPaletteMaterialTab] = useState('Шкіра');
 
   const [placeholders, setPlaceholders] = useState({
@@ -60,13 +60,19 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setSelectedStockItemId(null);
       setStockFolderFilter('shoes');
       setSupplier('Міла');
-      setPackagingSource('Основний склад');
+      setPackagingSource('Міла'); // За замовчуванням склад виробника
       setIncludeBox(true);
       setIncludeDustbag(true);
       setPaletteMaterialTab('Шкіра');
       setPlaceholders({ size: '', material: '', sole: '', color: '' });
     }
   }, [isOpen]);
+
+  // Зміна виробника автоматично оновлює склад списання пакування
+  const handleSupplierChange = (newSupplier) => {
+    setSupplier(newSupplier);
+    setPackagingSource(newSupplier);
+  };
 
   const handleClose = () => {
     if (typeof onClose === 'function') {
@@ -84,7 +90,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     return false;
   };
 
-  // Фільтр палітри за обраним виробником замовлення та вибраним матеріалом
+  // Фільтр палітри за обраним виробником та матеріалом
   let paletteStock = currentStock.filter(isColorOrMaterialItem).filter(item => {
     const matchesSupplier = (item.supplier || 'Міла') === supplier;
     const matchesMaterial = (item.materialType || 'Шкіра') === paletteMaterialTab;
@@ -283,9 +289,10 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setIsStockImagesOpen(false);
   };
 
+  // Списання пакування з урахуванням вибору (коробка/пильовик окремо)
   const deductPackaging = async (source, needBox, needDustbag) => {
     if (!needBox && !needDustbag) return;
-    const targetSource = source || 'Основний склад';
+    const targetSource = source || 'Міла';
 
     try {
       const boxItem = stock.find(i => i.folderId === 'boxes');
@@ -496,7 +503,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                 <label className="text-xs font-semibold text-slate-700 mb-1 block">Виробник взуття</label>
                 <select
                   value={supplier}
-                  onChange={(e) => setSupplier(e.target.value)}
+                  onChange={(e) => handleSupplierChange(e.target.value)}
                   className="w-full px-3 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 cursor-pointer focus:outline-none"
                 >
                   <option value="Міла">Міла</option>
@@ -657,7 +664,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
 
-            {/* Вкладки для вибору матеріалу під час вибору кольору */}
+            {/* Вкладки для вибору матеріалу (Шкіра / Замша) під час вибору кольору */}
             {activeImageType === 'color' ? (
               <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
                 <button

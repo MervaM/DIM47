@@ -218,7 +218,21 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
               </div>
             </div>
 
-            {/* БЛОК ЦІН ПРИХОВАНО ДЛЯ ВИРОБНИЦТВА */}
+            {/* Блок цін (повернено) */}
+            <div className="bg-slate-50/70 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-100">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-slate-900">Ціна товару:</span>
+                <span className="font-bold text-slate-900 text-sm">{order.price || 0} грн</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-500">
+                <span>Передплата:</span>
+                <span className="font-medium text-slate-700">{order.advance || 0} грн</span>
+              </div>
+              <div className="flex justify-between items-center pt-1.5 border-t border-slate-200/60 font-bold">
+                <span className="text-emerald-600">Залишок до сплати:</span>
+                <span className="text-emerald-600 text-sm">{remainingPayment > 0 ? remainingPayment : 0} грн</span>
+              </div>
+            </div>
           </div>
         );
       })}

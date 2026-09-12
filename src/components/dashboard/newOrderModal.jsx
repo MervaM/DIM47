@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
+import { X, Upload, Search, Image as ImageIcon, Wand2, Package } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -13,7 +13,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [sole, setSole] = useState('');
   const [color, setColor] = useState('');
   const [lining, setLining] = useState('');
+  
+  // Виробник та Джерело пакування
   const [supplier, setSupplier] = useState('Міла');
+  const [packagingSource, setPackagingSource] = useState('Основний склад');
+
+  // Опції пакування (чи потрібна коробка та пильовик)
+  const [includeBox, setIncludeBox] = useState(true);
+  const [includeDustbag, setIncludeDustbag] = useState(true);
 
   const [placeholders, setPlaceholders] = useState({
     size: '',
@@ -50,6 +57,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setSelectedStockItemId(null);
       setStockFolderFilter('shoes');
       setSupplier('Міла');
+      setPackagingSource('Основний склад');
+      setIncludeBox(true);
+      setIncludeDustbag(true);
       setPlaceholders({ size: '', material: '', sole: '', color: '' });
     }
   }, [isOpen]);
@@ -158,14 +168,17 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setAdvance(numPrice > 300 ? '300' : String(numPrice));
     }
 
-    // Авто-підтягування виробника моделі
+    let detectedSupplier = 'Міла';
     if (product.defaultSupplier) {
-      setSupplier(product.defaultSupplier);
+      detectedSupplier = product.defaultSupplier;
     } else if (Array.isArray(product.suppliers) && product.suppliers.length > 0) {
-      setSupplier(product.suppliers[0]);
+      detectedSupplier = product.suppliers[0];
     } else if (product.supplier) {
-      setSupplier(product.supplier);
+      detectedSupplier = product.supplier;
     }
+
+    setSupplier(detectedSupplier);
+    setPackagingSource(detectedSupplier);
 
     const isAvailability = product.folderId === 'availability';
 
@@ -176,6 +189,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setColor(product.color || '');
       setSelectedStockItemId(product.id);
       setPlaceholders({ size: '', material: '', sole: '', color: '' });
+      setPackagingSource('Основний склад');
     } else {
       setSize('');
       setMaterial('');
@@ -219,11 +233,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         setAdvance(numPrice > 300 ? '300' : String(numPrice));
       }
 
+      let detectedSupplier = 'Міла';
       if (product.defaultSupplier) {
-        setSupplier(product.defaultSupplier);
+        detectedSupplier = product.defaultSupplier;
       } else if (Array.isArray(product.suppliers) && product.suppliers.length > 0) {
-        setSupplier(product.suppliers[0]);
+        detectedSupplier = product.suppliers[0];
       }
+      setSupplier(detectedSupplier);
+      setPackagingSource(detectedSupplier);
 
       const isAvailability = product.folderId === 'availability';
 
@@ -234,6 +251,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         setColor(product.color || '');
         setSelectedStockItemId(product.id);
         setPlaceholders({ size: '', material: '', sole: '', color: '' });
+        setPackagingSource('Основний склад');
       } else {
         setSize('');
         setMaterial('');
@@ -255,39 +273,41 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setIsStockImagesOpen(false);
   };
 
-  // Автоматичне списання залишків пакування у обраного виробника
-  const deductPackagingForSupplier = async (chosenSupplier) => {
+  // Вибіркове списання пакування
+  const deductPackaging = async (source, needBox, needDustbag) => {
+    if (!needBox && !needDustbag) return;
+    const targetSource = source || 'Основний склад';
+
     try {
-      // Списуємо велику коробку і великий пильовик (або перші знайдені)
       const boxItem = stock.find(i => i.folderId === 'boxes');
       const dustbagItem = stock.find(i => i.folderId === 'dustbags');
 
-      if (boxItem) {
+      if (needBox && boxItem) {
         const boxRef = doc(db, 'stock', String(boxItem.id));
         const boxSnap = await getDoc(boxRef);
         if (boxSnap.exists()) {
           const data = boxSnap.data();
-          const currentSuppliers = data.suppliers || { 'Міла': data.quantity || 0, 'Валерій': 0 };
-          const currentQty = Number(currentSuppliers[chosenSupplier]) || 0;
+          const currentSuppliers = data.suppliers || { 'Основний склад': data.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+          const currentQty = Number(currentSuppliers[targetSource]) || 0;
           
           if (currentQty > 0) {
-            currentSuppliers[chosenSupplier] = currentQty - 1;
+            currentSuppliers[targetSource] = currentQty - 1;
             const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
             await updateDoc(boxRef, { suppliers: currentSuppliers, quantity: newTotalQty });
           }
         }
       }
 
-      if (dustbagItem) {
+      if (needDustbag && dustbagItem) {
         const dustRef = doc(db, 'stock', String(dustbagItem.id));
         const dustSnap = await getDoc(dustRef);
         if (dustSnap.exists()) {
           const data = dustSnap.data();
-          const currentSuppliers = data.suppliers || { 'Міла': data.quantity || 0, 'Валерій': 0 };
-          const currentQty = Number(currentSuppliers[chosenSupplier]) || 0;
+          const currentSuppliers = data.suppliers || { 'Основний склад': data.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+          const currentQty = Number(currentSuppliers[targetSource]) || 0;
           
           if (currentQty > 0) {
-            currentSuppliers[chosenSupplier] = currentQty - 1;
+            currentSuppliers[targetSource] = currentQty - 1;
             const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
             await updateDoc(dustRef, { suppliers: currentSuppliers, quantity: newTotalQty });
           }
@@ -311,6 +331,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       color,
       lining,
       supplier,
+      packagingSource,
+      includeBox,
+      includeDustbag,
       clientName,
       phone,
       city,
@@ -325,8 +348,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       createdAt: new Date().toISOString()
     };
 
-    // Списуємо пакування у того виробника, який обраний для замовлення
-    await deductPackagingForSupplier(supplier);
+    // Списання відбувається відповідно до увімкнених чекбоксів
+    await deductPackaging(packagingSource, includeBox, includeDustbag);
 
     if (typeof onSave === 'function') {
       onSave(newOrder);
@@ -458,17 +481,59 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
-          {/* Поле Виробник / Постачальник */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-600">Виробник (хто відшиває)</label>
-            <select
-              value={supplier}
-              onChange={(e) => setSupplier(e.target.value)}
-              className="w-full px-3 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 cursor-pointer focus:outline-none"
-            >
-              <option value="Міла">Міла</option>
-              <option value="Валерій">Валерій</option>
-            </select>
+          {/* Блок виробника та налаштувань пакування */}
+          <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 mb-1 block">Виробник взуття</label>
+                <select
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                  className="w-full px-3 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 cursor-pointer focus:outline-none"
+                >
+                  <option value="Міла">Міла</option>
+                  <option value="Валерій">Валерій</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 mb-1 block flex items-center gap-1">
+                  <Package size={14} className="text-slate-500" /> Списати з:
+                </label>
+                <select
+                  value={packagingSource}
+                  onChange={(e) => setPackagingSource(e.target.value)}
+                  className="w-full px-3 py-2 bg-amber-50/80 border border-amber-200 rounded-xl text-xs font-bold text-amber-950 cursor-pointer focus:outline-none"
+                >
+                  <option value="Основний склад">Мій склад (у мене)</option>
+                  <option value="Міла">Міла</option>
+                  <option value="Валерій">Валерій</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Чекбокси для коробок та пильовиків */}
+            <div className="flex items-center gap-4 pt-1 border-t border-slate-200/60">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={includeBox}
+                  onChange={(e) => setIncludeBox(e.target.checked)}
+                  className="rounded text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
+                />
+                Коробка
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={includeDustbag}
+                  onChange={(e) => setIncludeDustbag(e.target.checked)}
+                  className="rounded text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
+                />
+                Пильовик
+              </label>
+            </div>
           </div>
 
           <div className="space-y-2">

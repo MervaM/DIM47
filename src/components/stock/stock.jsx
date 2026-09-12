@@ -6,7 +6,7 @@ import PalettesFolder from './PalettesFolder';
 import DustbagsFolder from './DustbagsFolder';
 import AvailabilityFolder from './AvailabilityFolder';
 
-export default function Stock({ stock, setStock, onAddItem, onDeleteItem }) {
+export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem }) {
   const [activeFolder, setActiveFolder] = useState(() => {
     return localStorage.getItem('activeFolder') || null;
   });
@@ -94,33 +94,62 @@ export default function Stock({ stock, setStock, onAddItem, onDeleteItem }) {
           </div>
 
           <div className="border-t border-slate-100 pt-6 space-y-6">
-            <h3 className="text-lg font-bold text-slate-900">Загальний перегляд складу</h3>
+            <h3 className="text-lg font-bold text-slate-900 text-center sm:text-left">Загальний перегляд складу</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {boxesList.map(item => (
-                <div 
-                  key={item.id} 
-                  onClick={() => setActiveFolder('boxes')}
-                  className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition"
-                >
-                  {item.image ? (
-                    <img src={item.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200" />
-                  ) : (
-                    <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center text-[10px] text-slate-500">Фото</div>
-                  )}
-                  <div>
-                    <div className="font-bold text-slate-900 text-sm">Коробки ({item.sizeBox})</div>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      Кількість: <span className="font-semibold text-slate-700">{item.quantity} шт</span>
+              {boxesList.map(item => {
+                const total = item.quantity || 0;
+                const mila = item.suppliers?.['Міла'] || 0;
+                const valeriy = item.suppliers?.['Валерій'] || 0;
+                const myStock = item.suppliers?.['Основний склад'] !== undefined 
+                  ? item.suppliers['Основний склад'] 
+                  : Math.max(0, total - mila - valeriy);
+
+                return (
+                  <div 
+                    key={item.id} 
+                    onClick={() => setActiveFolder('boxes')}
+                    className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition"
+                  >
+                    {item.image ? (
+                      <img src={item.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center text-[10px] text-slate-500 flex-shrink-0">Фото</div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900 text-sm truncate">Коробки ({item.sizeBox || 'Великі'})</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        Загальна кількість: <span className="font-bold text-slate-900">{total} шт</span>
+                      </div>
+                      
+                      {/* Розподіл по Мілі, Валерію та вашому складу */}
+                      <div className="flex flex-wrap gap-1 text-[10px] mt-1.5">
+                        <span className="bg-slate-200/70 text-slate-800 font-bold px-1.5 py-0.5 rounded-md border border-slate-300/50">
+                          Мій склад: {myStock} шт
+                        </span>
+                        <span className="bg-indigo-50 text-indigo-800 font-bold px-1.5 py-0.5 rounded-md border border-indigo-100">
+                          Міла: {mila} шт
+                        </span>
+                        <span className="bg-purple-50 text-purple-800 font-bold px-1.5 py-0.5 rounded-md border border-purple-100">
+                          Валерій: {valeriy} шт
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {dustbagsList.map(item => {
                 const displayName = (!item.name || item.name === 'Товар') 
                   ? `Пильовик (${item.sizeBox || 'Великі'})` 
                   : item.name;
+
+                const total = item.quantity || 0;
+                const mila = item.suppliers?.['Міла'] || 0;
+                const valeriy = item.suppliers?.['Валерій'] || 0;
+                const myStock = item.suppliers?.['Основний склад'] !== undefined 
+                  ? item.suppliers['Основний склад'] 
+                  : Math.max(0, total - mila - valeriy);
 
                 return (
                   <div 
@@ -129,14 +158,27 @@ export default function Stock({ stock, setStock, onAddItem, onDeleteItem }) {
                     className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition"
                   >
                     {item.image ? (
-                      <img src={item.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200" />
+                      <img src={item.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
                     ) : (
-                      <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center text-lg">🛍️</div>
+                      <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center text-lg flex-shrink-0">🛍️</div>
                     )}
-                    <div>
-                      <div className="font-bold text-slate-900 text-sm">{displayName}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900 text-sm truncate">{displayName}</div>
                       <div className="text-xs text-slate-500 mt-0.5">
-                        Кількість: <span className="font-semibold text-slate-700">{item.quantity || 0} шт</span>
+                        Загальна кількість: <span className="font-bold text-slate-900">{total} шт</span>
+                      </div>
+
+                      {/* Розподіл по Мілі, Валерію та вашому складу */}
+                      <div className="flex flex-wrap gap-1 text-[10px] mt-1.5">
+                        <span className="bg-slate-200/70 text-slate-800 font-bold px-1.5 py-0.5 rounded-md border border-slate-300/50">
+                          Мій склад: {myStock} шт
+                        </span>
+                        <span className="bg-indigo-50 text-indigo-800 font-bold px-1.5 py-0.5 rounded-md border border-indigo-100">
+                          Міла: {mila} шт
+                        </span>
+                        <span className="bg-purple-50 text-purple-800 font-bold px-1.5 py-0.5 rounded-md border border-purple-100">
+                          Валерій: {valeriy} шт
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -145,7 +187,7 @@ export default function Stock({ stock, setStock, onAddItem, onDeleteItem }) {
             </div>
 
             {boxesList.length === 0 && dustbagsList.length === 0 && (
-              <p className="text-xs text-slate-400">Немає доданих коробок чи пильовиків.</p>
+              <p className="text-xs text-slate-400 text-center py-4">Немає доданих коробок чи пильовиків.</p>
             )}
 
           </div>

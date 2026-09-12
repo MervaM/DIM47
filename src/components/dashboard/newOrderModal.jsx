@@ -50,6 +50,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [activeImageType, setActiveImageType] = useState(null);
   
   const [stockFolderFilter, setStockFolderFilter] = useState('shoes');
+  // Фільтр виробника у модалці вибору зі складу ('all', 'Міла', 'Валерій')
+  const [stockSupplierFilter, setStockSupplierFilter] = useState('all');
 
   const fileInputRef = useRef(null);
   const colorInputRef = useRef(null);
@@ -59,6 +61,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setAdvance('300');
       setSelectedStockItemId(null);
       setStockFolderFilter('shoes');
+      setStockSupplierFilter('all');
       setSupplier('Міла');
       setPackagingSource('Міла'); 
       setIncludeBox(true);
@@ -68,7 +71,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     }
   }, [isOpen]);
 
-  // Зміна виробника автоматично оновлює склад списання пакування
   const handleSupplierChange = (newSupplier) => {
     setSupplier(newSupplier);
     setPackagingSource(newSupplier);
@@ -90,7 +92,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     return false;
   };
 
-  // Фільтр палітри за обраним виробником та матеріалом
   let paletteStock = currentStock.filter(isColorOrMaterialItem).filter(item => {
     const matchesSupplier = (item.supplier || 'Міла') === supplier;
     const matchesMaterial = (item.materialType || 'Шкіра') === paletteMaterialTab;
@@ -102,10 +103,19 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const getFilteredStockList = () => {
     if (activeImageType === 'color') return paletteStock;
 
+    let list = shoesStock;
     if (stockFolderFilter === 'availability') {
-      return shoesStock.filter(item => item.folderId === 'availability');
+      list = list.filter(item => item.folderId === 'availability');
+    } else {
+      list = list.filter(item => item.folderId === 'shoes' || !item.folderId);
     }
-    return shoesStock.filter(item => item.folderId === 'shoes' || !item.folderId);
+
+    // Фільтрація за виробником у вікні вибору зі складу
+    if (stockSupplierFilter !== 'all') {
+      list = list.filter(item => (item.supplier || item.defaultSupplier || 'Міла') === stockSupplierFilter);
+    }
+
+    return list;
   };
 
   const activeStockList = getFilteredStockList();
@@ -172,6 +182,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setAdvance(price);
   };
 
+  // Автоматичне визначення та підстановка виробника при виборі товару
+  const applyProductSupplier = (product) => {
+    const detectedSupplier = product.supplier || product.defaultSupplier || 'Міла';
+    setSupplier(detectedSupplier);
+    setPackagingSource(detectedSupplier);
+  };
+
   const handleSelectProductFromStock = (product) => {
     if (!product) return;
     setName(product.name || '');
@@ -184,7 +201,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setAdvance(numPrice > 300 ? '300' : String(numPrice));
     }
 
-    // ЗБЕРЕЖЕНО ВЛАСНИЙ ВИБІР ВИРОБНИКА: НЕ ПЕРЕЗАПИСУЄМО setSupplier(detectedSupplier)ТУТ!
+    applyProductSupplier(product);
 
     const isAvailability = product.folderId === 'availability';
 
@@ -239,7 +256,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         setAdvance(numPrice > 300 ? '300' : String(numPrice));
       }
 
-      // НЕ ПЕРЕЗАПИСУЄМО setSupplier ТУТ, щоб залишався ваш вибір (Міла або Валерій)
+      applyProductSupplier(product);
 
       const isAvailability = product.folderId === 'availability';
 
@@ -265,7 +282,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         });
       }
     } else if (activeImageType === 'color') {
-      // Автопідтягування зображення, назви та матеріалу з палітри
       if (imgUrl) setColorImage(imgUrl);
       if (product.name) setColor(product.name);
       
@@ -334,7 +350,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       sole,
       color,
       lining,
-      supplier, // Зберігає обраного виробника (Міла / Валерій)
+      supplier,
       packagingSource,
       includeBox,
       includeDustbag,
@@ -484,7 +500,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
-          {/* Виробник та налаштування пакування */}
+          {/* Виробник та налаштування пакування (можна змінювати вручну після вибору) */}
           <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -652,29 +668,8 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
 
-            {/* Вкладки для вибору матеріалу (Шкіра / Замша) під час вибору кольору */}
-            {activeImageType === 'color' ? (
-              <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
-                <button
-                  type="button"
-                  onClick={() => setPaletteMaterialTab('Шкіра')}
-                  className={`flex-1 py-1.5 text-center font-semibold rounded-lg transition cursor-pointer ${
-                    paletteMaterialTab === 'Шкіра' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Шкіра
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaletteMaterialTab('Замша')}
-                  className={`flex-1 py-1.5 text-center font-semibold rounded-lg transition cursor-pointer ${
-                    paletteMaterialTab === 'Замша' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Замша
-                </button>
-              </div>
-            ) : (
+            {/* Вкладки категорій (Взуття / Наявність) */}
+            {activeImageType !== 'color' && (
               <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
                 <button
                   type="button"
@@ -689,6 +684,52 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                   className={`flex-1 py-1.5 text-center font-semibold rounded-lg transition cursor-pointer ${stockFolderFilter === 'availability' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
                 >
                   Наявність
+                </button>
+              </div>
+            )}
+
+            {/* Фільтри виробників у модалці вибору зі складу (Всі, Міла, Валерій) */}
+            {activeImageType !== 'color' && (
+              <div className="flex gap-1 p-1 bg-indigo-50 border border-indigo-100 rounded-xl text-xs">
+                <button
+                  type="button"
+                  onClick={() => setStockSupplierFilter('all')}
+                  className={`flex-1 py-1 text-center font-bold rounded-lg transition cursor-pointer ${stockSupplierFilter === 'all' ? 'bg-indigo-600 text-white shadow-xs' : 'text-indigo-900 hover:bg-indigo-100'}`}
+                >
+                  Всі виробники
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStockSupplierFilter('Міла')}
+                  className={`flex-1 py-1 text-center font-bold rounded-lg transition cursor-pointer ${stockSupplierFilter === 'Міла' ? 'bg-indigo-600 text-white shadow-xs' : 'text-indigo-900 hover:bg-indigo-100'}`}
+                >
+                  Міла
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStockSupplierFilter('Валерій')}
+                  className={`flex-1 py-1 text-center font-bold rounded-lg transition cursor-pointer ${stockSupplierFilter === 'Валерій' ? 'bg-indigo-600 text-white shadow-xs' : 'text-indigo-900 hover:bg-indigo-100'}`}
+                >
+                  Валерій
+                </button>
+              </div>
+            )}
+
+            {activeImageType === 'color' && (
+              <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPaletteMaterialTab('Шкіра')}
+                  className={`flex-1 py-1.5 text-center font-semibold rounded-lg transition cursor-pointer ${paletteMaterialTab === 'Шкіра' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  Шкіра
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaletteMaterialTab('Замша')}
+                  className={`flex-1 py-1.5 text-center font-semibold rounded-lg transition cursor-pointer ${paletteMaterialTab === 'Замша' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  Замша
                 </button>
               </div>
             )}

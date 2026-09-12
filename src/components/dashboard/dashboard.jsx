@@ -112,6 +112,7 @@ export default function Dashboard() {
           stockItemId: item.stockItemId || '',
           usedBox: item.usedBox || '',
           usedDustbag: item.usedDustbag || '',
+          supplier: item.supplier || 'Міла', // ВИПРАВЛЕНО: тепер тягнемо виробника з бази
           productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color || ''}, ${item.material || ''}, ${item.filling || item.sole || ''}`
         });
       });
@@ -135,7 +136,6 @@ export default function Dashboard() {
     setShowNewOrderModal(true);
   };
 
-  // Збереження ТТН + Автоматичне списування матеріалів
   const handleInlineSaveOrder = async (updatedOrder) => {
     try {
       const orderRef = doc(db, "orders", updatedOrder.id);
@@ -149,12 +149,12 @@ export default function Dashboard() {
         price: Number(updatedOrder.price) || 0,
         advance: Number(updatedOrder.advance) || 0,
         usedBox: updatedOrder.selectedBox || updatedOrder.usedBox || '',
-        usedDustbag: updatedOrder.selectedDustbag || updatedOrder.usedDustbag || ''
+        usedDustbag: updatedOrder.selectedDustbag || updatedOrder.usedDustbag || '',
+        supplier: updatedOrder.supplier || 'Міла' // Зберігаємо виробника при швидкому редагуванні
       };
 
       await updateDoc(orderRef, updateData);
 
-      // Списання коробки зі складу (quantity - 1)
       if (updatedOrder.selectedBox && updatedOrder.selectedBox !== 'Без коробки') {
         const stockSnap = await getDocs(collection(db, "stock"));
         stockSnap.forEach(async (docSnap) => {
@@ -164,7 +164,6 @@ export default function Dashboard() {
         });
       }
 
-      // Списання пильовика зі складу (quantity - 1)
       if (updatedOrder.selectedDustbag && updatedOrder.selectedDustbag !== 'Без пильовика') {
         const stockSnap = await getDocs(collection(db, "stock"));
         stockSnap.forEach(async (docSnap) => {
@@ -206,6 +205,7 @@ export default function Dashboard() {
         productImage: orderData.image || '',
         colorImage: orderData.colorImage || '',
         stockItemId: orderData.stockItemId || '',
+        supplier: orderData.supplier || 'Міла', // ВИПРАВЛЕНО: записуємо обраного виробника у Firestore
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
 
@@ -270,7 +270,6 @@ export default function Dashboard() {
     }
   };
 
-  // Зміна статусу: При "Відмові" взуття повертається у наявність, а коробки/пильовики на склад (+1 шт.)
   const handleStatusChange = async (id, newStatus) => {
     try {
       const orderRef = doc(db, "orders", id);
@@ -279,7 +278,6 @@ export default function Dashboard() {
       await updateDoc(orderRef, { status: newStatus });
 
       if (newStatus === 'Відмова' && targetOrder) {
-        // 1. Повертаємо пара в "Наявність"
         await addDoc(collection(db, "stock"), {
           folderId: 'availability',
           name: targetOrder.productTitle || targetOrder.name || 'Товар з відмови',
@@ -297,7 +295,6 @@ export default function Dashboard() {
           createdAt: new Date().toISOString()
         });
 
-        // 2. Повертаємо коробку та пильовик на склад (quantity + 1)
         const stockSnap = await getDocs(collection(db, "stock"));
         stockSnap.forEach(async (docSnap) => {
           const itemData = docSnap.data();

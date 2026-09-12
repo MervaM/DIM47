@@ -109,7 +109,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                   <div 
                     key={item.id} 
                     onClick={() => setActiveFolder('boxes')}
-                    className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition"
+                    className="flex items-start gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition"
                   >
                     {item.image ? (
                       <img src={item.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
@@ -119,20 +119,23 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-slate-900 text-sm truncate">Коробки ({item.sizeBox || 'Великі'})</div>
                       <div className="text-xs text-slate-500 mt-0.5">
-                        Загальна кількість: <span className="font-bold text-slate-900">{total} шт</span>
+                        Загальна кількість: <span className="font-extrabold text-slate-900">{total} шт</span>
                       </div>
                       
-                      {/* Розподіл по Мілі, Валерію та вашому складу */}
-                      <div className="flex flex-wrap gap-1 text-[10px] mt-1.5">
-                        <span className="bg-slate-200/70 text-slate-800 font-bold px-1.5 py-0.5 rounded-md border border-slate-300/50">
-                          Мій склад: {myStock} шт
-                        </span>
-                        <span className="bg-indigo-50 text-indigo-800 font-bold px-1.5 py-0.5 rounded-md border border-indigo-100">
-                          Міла: {mila} шт
-                        </span>
-                        <span className="bg-purple-50 text-purple-800 font-bold px-1.5 py-0.5 rounded-md border border-purple-100">
-                          Валерій: {valeriy} шт
-                        </span>
+                      {/* Вивід у стовпчик */}
+                      <div className="flex flex-col gap-1 text-[11px] mt-2 border-t border-slate-200/60 pt-2">
+                        <div className="flex justify-between items-center text-slate-700">
+                          <span>Мій склад:</span>
+                          <span className="font-bold text-slate-900">{myStock} шт</span>
+                        </div>
+                        <div className="flex justify-between items-center text-indigo-900">
+                          <span>Міла:</span>
+                          <span className="font-bold">{mila} шт</span>
+                        </div>
+                        <div className="flex justify-between items-center text-purple-900">
+                          <span>Валерій:</span>
+                          <span className="font-bold">{valeriy} шт</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -155,7 +158,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                   <div 
                     key={item.id} 
                     onClick={() => setActiveFolder('dustbags')}
-                    className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition"
+                    className="flex items-start gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition"
                   >
                     {item.image ? (
                       <img src={item.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
@@ -165,20 +168,23 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-slate-900 text-sm truncate">{displayName}</div>
                       <div className="text-xs text-slate-500 mt-0.5">
-                        Загальна кількість: <span className="font-bold text-slate-900">{total} шт</span>
+                        Загальна кількість: <span className="font-extrabold text-slate-900">{total} шт</span>
                       </div>
 
-                      {/* Розподіл по Мілі, Валерію та вашому складу */}
-                      <div className="flex flex-wrap gap-1 text-[10px] mt-1.5">
-                        <span className="bg-slate-200/70 text-slate-800 font-bold px-1.5 py-0.5 rounded-md border border-slate-300/50">
-                          Мій склад: {myStock} шт
-                        </span>
-                        <span className="bg-indigo-50 text-indigo-800 font-bold px-1.5 py-0.5 rounded-md border border-indigo-100">
-                          Міла: {mila} шт
-                        </span>
-                        <span className="bg-purple-50 text-purple-800 font-bold px-1.5 py-0.5 rounded-md border border-purple-100">
-                          Валерій: {valeriy} шт
-                        </span>
+                      {/* Вивід у стовпчик */}
+                      <div className="flex flex-col gap-1 text-[11px] mt-2 border-t border-slate-200/60 pt-2">
+                        <div className="flex justify-between items-center text-slate-700">
+                          <span>Мій склад:</span>
+                          <span className="font-bold text-slate-900">{myStock} шт</span>
+                        </div>
+                        <div className="flex justify-between items-center text-indigo-900">
+                          <span>Міла:</span>
+                          <span className="font-bold">{mila} шт</span>
+                        </div>
+                        <div className="flex justify-between items-center text-purple-900">
+                          <span>Валерій:</span>
+                          <span className="font-bold">{valeriy} шт</span>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -62,7 +62,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
             style={{ minHeight: '85vh' }}
           >
             <div className="space-y-3.5">
-              {/* Верхній блок: Статус та Дії */}
+              {/* Верхній блок: Статус, Виробник та Дії */}
               <div className="flex items-center justify-between gap-2">
                 <select
                   value={order.status || 'Нове'}
@@ -75,6 +75,13 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                     </option>
                   ))}
                 </select>
+
+                {/* Бейдж виробника зверху картки */}
+                {order.supplier && (
+                  <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-2xs">
+                    Виробник: {order.supplier}
+                  </span>
+                )}
 
                 <div className="flex items-center gap-1">
                   <button
@@ -211,7 +218,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
               </div>
             </div>
 
-            {/* БЛОК ЦІН ПРИХОВАНО ДЛЯ ВИРОБНИЦТВА (не виводиться тут взагалі) */}
+            {/* БЛОК ЦІН ПРИХОВАНО ДЛЯ ВИРОБНИЦТВА */}
           </div>
         );
       })}

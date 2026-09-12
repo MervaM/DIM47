@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Plus, Trash2, Edit3, X, Search, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Edit3, X, Search } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -12,7 +12,9 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
   const [formName, setFormName] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formCost, setFormCost] = useState('');
-  const [formSupplier, setFormSupplier] = useState('Міла');
+  
+  // Виробники у вигляді масиву (чекбокси)
+  const [formSuppliers, setFormSuppliers] = useState(['Міла']);
   const [formImage, setFormImage] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,7 +25,7 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
     setFormName('');
     setFormPrice('');
     setFormCost('');
-    setFormSupplier('Міла');
+    setFormSuppliers(['Міла']);
     setFormImage('');
     setShowModal(true);
   };
@@ -34,9 +36,29 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
     setFormName(item.name || '');
     setFormPrice(item.price !== undefined ? item.price : '');
     setFormCost(item.cost !== undefined ? item.cost : '');
-    setFormSupplier(item.supplier || 'Міла');
+    
+    // Підтримка як старого поля supplier, так і нового масиву suppliers
+    let initialSuppliers = ['Міла'];
+    if (Array.isArray(item.suppliers)) {
+      initialSuppliers = item.suppliers;
+    } else if (item.supplier) {
+      initialSuppliers = [item.supplier];
+    }
+    setFormSuppliers(initialSuppliers);
     setFormImage(item.image || '');
     setShowModal(true);
+  };
+
+  const handleSupplierToggle = (supplierName) => {
+    setFormSuppliers(prev => {
+      if (prev.includes(supplierName)) {
+        // Залишаємо хоча б одного виробника, щоб не було пустого масиву
+        if (prev.length === 1) return prev;
+        return prev.filter(s => s !== supplierName);
+      } else {
+        return [...prev, supplierName];
+      }
+    });
   };
 
   const handleImageUpload = (e) => {
@@ -92,7 +114,8 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
       name: formName,
       price: formPrice !== '' ? Number(formPrice) : '',
       cost: formCost !== '' ? Number(formCost) : '',
-      supplier: formSupplier,
+      suppliers: formSuppliers,
+      supplier: formSuppliers[0] || 'Міла', // Для зворотної сумісності
       image: formImage
     };
 
@@ -111,7 +134,15 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
 
   const filteredShoes = shoesList.filter(item => {
     const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSupplier = selectedSupplierFilter === 'усі' || item.supplier === selectedSupplierFilter;
+    
+    let itemSuppliers = ['Міла'];
+    if (Array.isArray(item.suppliers)) {
+      itemSuppliers = item.suppliers;
+    } else if (item.supplier) {
+      itemSuppliers = [item.supplier];
+    }
+
+    const matchesSupplier = selectedSupplierFilter === 'усі' || itemSuppliers.includes(selectedSupplierFilter);
     return matchesSearch && matchesSupplier;
   });
 
@@ -162,50 +193,56 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
         <p className="text-xs text-slate-400 py-8 text-center">Моделей не знайдено.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {filteredShoes.map(item => (
-            <div 
-              key={item.id} 
-              onClick={() => onSelectDetails && onSelectDetails(item)}
-              className="p-3 bg-white hover:bg-slate-50 cursor-pointer rounded-2xl border border-slate-100 flex items-center justify-between gap-3 transition shadow-xs"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                {item.image ? (
-                  <img src={item.image} alt="" className="w-14 h-14 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
-                ) : (
-                  <div className="w-14 h-14 bg-slate-100 rounded-xl flex items-center justify-center text-[10px] text-slate-400 flex-shrink-0">
-                    Фото
-                  </div>
-                )}
+          {filteredShoes.map(item => {
+            const itemSuppliers = Array.isArray(item.suppliers) ? item.suppliers : [item.supplier || 'Міла'];
 
-                <div className="flex flex-col min-w-0">
-                  <strong className="text-slate-900 text-xs truncate">{item.name}</strong>
-                  <div className="flex items-center gap-2 mt-1">
-                    {item.price !== '' && <span className="text-xs font-bold text-emerald-700">{item.price} грн</span>}
-                    <span className="bg-indigo-50 text-indigo-800 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-indigo-100">
-                      {item.supplier || 'Міла'}
-                    </span>
+            return (
+              <div 
+                key={item.id} 
+                onClick={() => onSelectDetails && onSelectDetails(item)}
+                className="p-3 bg-white hover:bg-slate-50 cursor-pointer rounded-2xl border border-slate-100 flex items-center justify-between gap-3 transition shadow-xs"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {item.image ? (
+                    <img src={item.image} alt="" className="w-14 h-14 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
+                  ) : (
+                    <div className="w-14 h-14 bg-slate-100 rounded-xl flex items-center justify-center text-[10px] text-slate-400 flex-shrink-0">
+                      Фото
+                    </div>
+                  )}
+
+                  <div className="flex flex-col min-w-0">
+                    <strong className="text-slate-900 text-xs truncate">{item.name}</strong>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {item.price !== '' && <span className="text-xs font-bold text-emerald-700 mr-1">{item.price} грн</span>}
+                      {itemSuppliers.map(sup => (
+                        <span key={sup} className="bg-indigo-50 text-indigo-800 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-indigo-100">
+                          {sup}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button 
-                  type="button"
-                  onClick={(e) => handleOpenEditModal(item, e)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
-                >
-                  <Edit3 size={15} />
-                </button>
-                <button 
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id); }}
-                  className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                >
-                  <Trash2 size={15} />
-                </button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button 
+                    type="button"
+                    onClick={(e) => handleOpenEditModal(item, e)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                  >
+                    <Edit3 size={15} />
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id); }}
+                    className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -245,11 +282,20 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
               </div>
 
               <div>
-                <label className="block font-medium text-slate-600 mb-1">Виробник</label>
-                <select value={formSupplier} onChange={e => setFormSupplier(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-white">
-                  <option value="Міла">Міла</option>
-                  <option value="Валерій">Валерій</option>
-                </select>
+                <label className="block font-medium text-slate-600 mb-1.5">Виробник (можуть шити):</label>
+                <div className="flex gap-4 p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                  {['Міла', 'Валерій'].map(sup => (
+                    <label key={sup} className="flex items-center gap-2 cursor-pointer font-medium text-slate-800">
+                      <input 
+                        type="checkbox"
+                        checked={formSuppliers.includes(sup)}
+                        onChange={() => handleSupplierToggle(sup)}
+                        className="w-4 h-4 rounded text-slate-900 focus:ring-slate-900 cursor-pointer"
+                      />
+                      {sup}
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div>

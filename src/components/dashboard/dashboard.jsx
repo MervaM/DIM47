@@ -112,7 +112,8 @@ export default function Dashboard() {
           stockItemId: item.stockItemId || '',
           usedBox: item.usedBox || '',
           usedDustbag: item.usedDustbag || '',
-          supplier: item.supplier || 'Міла', // ВИПРАВЛЕНО: тепер тягнемо виробника з бази
+          packagingSource: item.packagingSource || '',
+          supplier: item.supplier || 'Міла',
           productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color || ''}, ${item.material || ''}, ${item.filling || item.sole || ''}`
         });
       });
@@ -150,7 +151,7 @@ export default function Dashboard() {
         advance: Number(updatedOrder.advance) || 0,
         usedBox: updatedOrder.selectedBox || updatedOrder.usedBox || '',
         usedDustbag: updatedOrder.selectedDustbag || updatedOrder.usedDustbag || '',
-        supplier: updatedOrder.supplier || 'Міла' // Зберігаємо виробника при швидкому редагуванні
+        supplier: updatedOrder.supplier || 'Міла'
       };
 
       await updateDoc(orderRef, updateData);
@@ -205,7 +206,8 @@ export default function Dashboard() {
         productImage: orderData.image || '',
         colorImage: orderData.colorImage || '',
         stockItemId: orderData.stockItemId || '',
-        supplier: orderData.supplier || 'Міла', // ВИПРАВЛЕНО: записуємо обраного виробника у Firestore
+        supplier: orderData.supplier || 'Міла',
+        packagingSource: orderData.packagingSource || 'Міла',
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
 
@@ -243,6 +245,41 @@ export default function Dashboard() {
       const orderToDelete = orders.find(o => o.id === id);
 
       if (orderToDelete) {
+        // 1. Повертаємо пакування назад на склад (розподіляємо по джерелах списання)
+        const packagingSource = orderToDelete.packagingSource || orderToDelete.supplier || 'Міла';
+        const usedBox = orderToDelete.usedBox;
+        const usedDustbag = orderToDelete.usedDustbag;
+
+        const stockSnap = await getDocs(collection(db, "stock"));
+        
+        for (const docSnap of stockSnap.docs) {
+          const itemData = docSnap.data();
+          const stockRef = doc(db, "stock", docSnap.id);
+
+          // Повертаємо коробку
+          if (usedBox && usedBox !== 'Без коробки' && itemData.name === usedBox) {
+            const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+            const currentQty = Number(currentSuppliers[packagingSource]) || 0;
+            
+            currentSuppliers[packagingSource] = currentQty + 1;
+            const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
+            
+            await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+          }
+
+          // Повертаємо пильовик
+          if (usedDustbag && usedDustbag !== 'Без пильовика' && itemData.name === usedDustbag) {
+            const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+            const currentQty = Number(currentSuppliers[packagingSource]) || 0;
+            
+            currentSuppliers[packagingSource] = currentQty + 1;
+            const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
+            
+            await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+          }
+        }
+
+        // 2. Якщо замовлення було з наявності — повертаємо пару назад у наявність
         if (orderToDelete.status === 'З наявності' || orderToDelete.stockItemId) {
           await addDoc(collection(db, "stock"), {
             folderId: 'availability',
@@ -257,12 +294,12 @@ export default function Dashboard() {
             image: orderToDelete.image || orderToDelete.productImage || '',
             createdAt: new Date().toISOString()
           });
-
-          await fetchStockProducts();
         }
 
+        // 3. Видаляємо саме замовлення з бази
         await deleteDoc(doc(db, "orders", id));
         setOrders(prevOrders => prevOrders.filter(o => o.id !== id));
+        await fetchStockProducts();
       }
     } catch (error) {
       console.error('Помилка видалення замовлення:', error);

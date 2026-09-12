@@ -184,17 +184,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setAdvance(numPrice > 300 ? '300' : String(numPrice));
     }
 
-    let detectedSupplier = 'Міла';
-    if (product.defaultSupplier) {
-      detectedSupplier = product.defaultSupplier;
-    } else if (Array.isArray(product.suppliers) && product.suppliers.length > 0) {
-      detectedSupplier = product.suppliers[0];
-    } else if (product.supplier) {
-      detectedSupplier = product.supplier;
-    }
-
-    setSupplier(detectedSupplier);
-    setPackagingSource(detectedSupplier);
+    // ЗБЕРЕЖЕНО ВЛАСНИЙ ВИБІР ВИРОБНИКА: НЕ ПЕРЕЗАПИСУЄМО setSupplier(detectedSupplier)ТУТ!
 
     const isAvailability = product.folderId === 'availability';
 
@@ -249,14 +239,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         setAdvance(numPrice > 300 ? '300' : String(numPrice));
       }
 
-      let detectedSupplier = 'Міла';
-      if (product.defaultSupplier) {
-        detectedSupplier = product.defaultSupplier;
-      } else if (Array.isArray(product.suppliers) && product.suppliers.length > 0) {
-        detectedSupplier = product.suppliers[0];
-      }
-      setSupplier(detectedSupplier);
-      setPackagingSource(detectedSupplier);
+      // НЕ ПЕРЕЗАПИСУЄМО setSupplier ТУТ, щоб залишався ваш вибір (Міла або Валерій)
 
       const isAvailability = product.folderId === 'availability';
 
@@ -286,7 +269,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       if (imgUrl) setColorImage(imgUrl);
       if (product.name) setColor(product.name);
       
-      // Автоматичне підтягування матеріалу (Шкіра / Замша)
       const detectedMaterial = product.materialType || paletteMaterialTab;
       if (detectedMaterial) {
         setMaterial(detectedMaterial);
@@ -352,7 +334,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       sole,
       color,
       lining,
-      supplier,
+      supplier, // Зберігає обраного виробника (Міла / Валерій)
       packagingSource,
       includeBox,
       includeDustbag,

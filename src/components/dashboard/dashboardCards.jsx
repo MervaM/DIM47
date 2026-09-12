@@ -55,6 +55,9 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
         const remainingPayment = (Number(order.price) || 0) - (Number(order.advance) || 0);
         const isEditingTtn = editingTtnId === order.id;
 
+        // Шукаємо виробника по всіх можливих ключах
+        const displaySupplier = order.supplier || order.manufacturer || order.maker || order.factory;
+
         return (
           <div 
             key={order.id}
@@ -76,10 +79,10 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   ))}
                 </select>
 
-                {/* Чіткий вивід виробника без примусових замін */}
-                {order.supplier && (
+                {/* Бейдж виробника (відобразиться обов'язково, якщо знайдуться дані) */}
+                {displaySupplier && (
                   <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-2xs">
-                    Виробник: {order.supplier}
+                    Виробник: {displaySupplier}
                   </span>
                 )}
 

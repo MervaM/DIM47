@@ -18,9 +18,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [supplier, setSupplier] = useState('Міла');
   const [packagingSource, setPackagingSource] = useState('Основний склад');
 
-  // Опції пакування (чи потрібна коробка та пильовик)
+  // Опції пакування
   const [includeBox, setIncludeBox] = useState(true);
   const [includeDustbag, setIncludeDustbag] = useState(true);
+
+  // Фікація вибраної вкладки матеріалу в модаці палітри
+  const [paletteMaterialTab, setPaletteMaterialTab] = useState('Шкіра');
 
   const [placeholders, setPlaceholders] = useState({
     size: '',
@@ -60,6 +63,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setPackagingSource('Основний склад');
       setIncludeBox(true);
       setIncludeDustbag(true);
+      setPaletteMaterialTab('Шкіра');
       setPlaceholders({ size: '', material: '', sole: '', color: '' });
     }
   }, [isOpen]);
@@ -80,8 +84,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     return false;
   };
 
-  let paletteStock = currentStock.filter(isColorOrMaterialItem);
-  const shoesStock = currentStock.filter(item => !paletteStock.includes(item));
+  // Фільтр палітри за обраним виробником замовлення та вибраним матеріалом
+  let paletteStock = currentStock.filter(isColorOrMaterialItem).filter(item => {
+    const matchesSupplier = (item.supplier || 'Міла') === supplier;
+    const matchesMaterial = (item.materialType || 'Шкіра') === paletteMaterialTab;
+    return matchesSupplier && matchesMaterial;
+  });
+
+  const shoesStock = currentStock.filter(item => !isColorOrMaterialItem(item));
 
   const getFilteredStockList = () => {
     if (activeImageType === 'color') return paletteStock;
@@ -273,7 +283,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setIsStockImagesOpen(false);
   };
 
-  // Вибіркове списання пакування
   const deductPackaging = async (source, needBox, needDustbag) => {
     if (!needBox && !needDustbag) return;
     const targetSource = source || 'Основний склад';
@@ -348,7 +357,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       createdAt: new Date().toISOString()
     };
 
-    // Списання відбувається відповідно до увімкнених чекбоксів
     await deductPackaging(packagingSource, includeBox, includeDustbag);
 
     if (typeof onSave === 'function') {
@@ -481,7 +489,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
-          {/* Блок виробника та налаштувань пакування */}
+          {/* Виробник та налаштування пакування */}
           <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -512,7 +520,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               </div>
             </div>
 
-            {/* Чекбокси для коробок та пильовиків */}
             <div className="flex items-center gap-4 pt-1 border-t border-slate-200/60">
               <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
                 <input
@@ -643,12 +650,36 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
           >
             <div className="flex items-center justify-between pb-2 border-b border-slate-150">
               <h3 className="font-bold text-slate-900 text-sm">
-                {activeImageType === 'color' ? 'Виберіть колір з палітри' : 'Виберіть зображення зі складу'}
+                {activeImageType === 'color' 
+                  ? `Палітра: ${supplier}` 
+                  : 'Виберіть зображення зі складу'}
               </h3>
               <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
 
-            {activeImageType !== 'color' && (
+            {/* Вкладки для вибору матеріалу під час вибору кольору */}
+            {activeImageType === 'color' ? (
+              <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPaletteMaterialTab('Шкіра')}
+                  className={`flex-1 py-1.5 text-center font-semibold rounded-lg transition cursor-pointer ${
+                    paletteMaterialTab === 'Шкіра' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Шкіра
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaletteMaterialTab('Замша')}
+                  className={`flex-1 py-1.5 text-center font-semibold rounded-lg transition cursor-pointer ${
+                    paletteMaterialTab === 'Замша' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Замша
+                </button>
+              </div>
+            ) : (
               <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
                 <button
                   type="button"
@@ -703,7 +734,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
                 })
               ) : (
                 <div className="col-span-3 py-8 text-center text-xs text-slate-400">
-                  {activeImageType === 'color' ? 'Палітра кольорів порожня' : 'У цій категорії поки немає товарів'}
+                  {activeImageType === 'color' 
+                    ? `Палітра ${supplier} (${paletteMaterialTab}) порожня` 
+                    : 'У цій категорії поки немає товарів'}
                 </div>
               )}
             </div>

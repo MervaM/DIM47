@@ -54,6 +54,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
       {orders.map((order) => {
         const remainingPayment = (Number(order.price) || 0) - (Number(order.advance) || 0);
         const isEditingTtn = editingTtnId === order.id;
+        const currentSupplier = order.supplier || order.manufacturer || order.factory;
 
         return (
           <div 
@@ -77,9 +78,9 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </select>
 
                 {/* Бейдж виробника зверху картки */}
-                {order.supplier && (
+                {currentSupplier && (
                   <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-2xs">
-                    Виробник: {order.supplier}
+                    Виробник: {currentSupplier}
                   </span>
                 )}
 
@@ -218,7 +219,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
               </div>
             </div>
 
-            {/* Блок цін (повернено) */}
+            {/* Блок цін */}
             <div className="bg-slate-50/70 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-100">
               <div className="flex justify-between items-center">
                 <span className="font-semibold text-slate-900">Ціна товару:</span>

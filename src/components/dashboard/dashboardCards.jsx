@@ -76,10 +76,12 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   ))}
                 </select>
 
-                {/* Виводимо саме того виробника, якого вибрали при створенні замовлення */}
-                <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-2xs">
-                  Виробник: {order.supplier || 'Міла'}
-                </span>
+                {/* Чіткий вивід виробника без примусових замін */}
+                {order.supplier && (
+                  <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-2xs">
+                    Виробник: {order.supplier}
+                  </span>
+                )}
 
                 <div className="flex items-center gap-1">
                   <button

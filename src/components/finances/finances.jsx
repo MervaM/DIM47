@@ -72,18 +72,18 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }, 0);
   };
 
-  // 1. Пошиття/закупка з індивідуальних замовлень
+  // 1. Пошиття/закупка з індивідуальних замовлень (беремо тільки якщо сума більша за 0)
   const orderTailoringCostTx = orders
+    .filter(o => Number(o.cost) > 0)
     .map(o => ({
       id: `ord-cost-${o.id}`,
       date: o.date || 'Замовлення',
       type: 'Витрата',
       category: 'Пошиття взуття',
       comment: o.productTitle || o.name || 'Взуття',
-      amount: Number(o.cost) || 0,
+      amount: Number(o.cost),
       isAuto: true
-    }))
-    .filter(t => t.amount > 0 || t.comment);
+    }));
 
   // 2. Закупка товарів із папки "Наявність" (folderId === 'availability')
   const availabilityShoesCostTx = stock
@@ -94,7 +94,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       type: 'Витрата',
       category: 'Пошиття взуття',
       comment: `${item.name || 'Взуття'} (Наявність${item.size ? `, ${item.size} р.` : ''})`,
-      amount: Number(item.cost) || 0,
+      amount: Number(item.cost),
       isAuto: true
     }));
 

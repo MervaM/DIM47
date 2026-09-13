@@ -38,6 +38,16 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
   const [isEditingMila, setIsEditingMila] = useState(false);
   const [milaAdvanceInput, setMilaAdvanceInput] = useState('59000');
 
+  // Стейт ручної корекції використаного пошиття Міли (для додаткових пар/розробки)
+  const [milaExtraCost, setMilaExtraCost] = useState(0);
+  const [isEditingMilaExtra, setIsEditingMilaExtra] = useState(false);
+  const [milaExtraInput, setMilaExtraInput] = useState('0');
+
+  // Стейт ручної корекції суми виплати Валерію
+  const [valeriyManualOverride, setValeriyManualOverride] = useState(null);
+  const [isEditingValeriy, setIsEditingValeriy] = useState(false);
+  const [valeriyInput, setValeriyInput] = useState('0');
+
   // Стейт форми додавання
   const [type, setType] = useState('Витрата');
   const [category, setCategory] = useState('Реклама');
@@ -65,12 +75,20 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       const txList = txSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (txList.length > 0) setFinances(txList);
 
-      // Завантаження авансу Міли з Firestore, якщо зберігається там
+      // Завантаження збережених налаштувань з Firestore
       const settingsSnap = await getDocs(collection(db, 'settings'));
       settingsSnap.forEach(d => {
         if (d.id === 'mila_advance' && d.data().value !== undefined) {
           setMilaAdvance(Number(d.data().value) || 0);
           setMilaAdvanceInput(String(d.data().value));
+        }
+        if (d.id === 'mila_extra_cost' && d.data().value !== undefined) {
+          setMilaExtraCost(Number(d.data().value) || 0);
+          setMilaExtraInput(String(d.data().value));
+        }
+        if (d.id === 'valeriy_manual_override' && d.data().value !== undefined) {
+          setValeriyManualOverride(Number(d.data().value));
+          setValeriyInput(String(d.data().value));
         }
       });
     } catch (error) {
@@ -85,22 +103,51 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       try {
         await setDoc(doc(db, 'settings', 'mila_advance'), { value: val });
       } catch (err) {
-        console.error('Помилка збереження авансу Міли:', err);
+        console.error(err);
       }
     }
     setIsEditingMila(false);
   };
 
-  // Розрахунок по виробниках (Міла / Валерій)
+  const handleSaveMilaExtra = async () => {
+    const val = parseFloat(milaExtraInput);
+    if (!isNaN(val)) {
+      setMilaExtraCost(val);
+      try {
+        await setDoc(doc(db, 'settings', 'mila_extra_cost'), { value: val });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    setIsEditingMilaExtra(false);
+  };
+
+  const handleSaveValeriy = async () => {
+    const val = parseFloat(valeriyInput);
+    if (!isNaN(val)) {
+      setValeriyManualOverride(val);
+      try {
+        await setDoc(doc(db, 'settings', 'valeriy_manual_override'), { value: val });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    setIsEditingValeriy(false);
+  };
+
+  // Розрахунок по виробниках
   const milaOrdersCost = orders
     .filter(o => (o.supplier || 'Міла') === 'Міла' && Number(o.cost) > 0)
     .reduce((sum, o) => sum + Number(o.cost), 0);
 
-  const valeriyOrdersCost = orders
+  const totalMilaUsed = milaOrdersCost + milaExtraCost;
+  const milaRemainingBalance = milaAdvance - totalMilaUsed;
+
+  const autoValeriyCost = orders
     .filter(o => (o.supplier || '').toLowerCase().includes('валєр') && Number(o.cost) > 0)
     .reduce((sum, o) => sum + Number(o.cost), 0);
 
-  const milaRemainingBalance = milaAdvance - milaOrdersCost;
+  const valeriyTotalToPay = valeriyManualOverride !== null ? valeriyManualOverride : autoValeriyCost;
 
   const getUsedPackagingCount = (packName) => {
     return orders.reduce((acc, o) => {
@@ -111,7 +158,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }, 0);
   };
 
-  // 1. Пошиття/закупка з індивідуальних замовлень (з копійками)
   const orderTailoringCostTx = orders
     .filter(o => Number(o.cost) > 0)
     .map(o => ({
@@ -124,7 +170,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       isAuto: true
     }));
 
-  // 2. Закупка товарів із папки "Наявність"
   const availabilityShoesCostTx = stock
     .filter(item => item.folderId === 'availability' && Number(item.cost) > 0)
     .map(item => ({
@@ -167,7 +212,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       isAuto: true
     }));
 
-  // Пакування
   const stockTx = stock
     .filter(item => {
       const name = (item.name || '').toLowerCase();
@@ -203,25 +247,15 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     ...finances
   ];
 
-  // Аналітика інвесторів
   const getInvestorsAnalytics = () => {
     const investorMap = {};
-
     finances.forEach(tx => {
       if (tx.type === 'Інвестиція' || tx.type === 'Повернення інвестиції') {
         const name = (tx.investorName || tx.comment || 'Інвестор').trim();
         if (!investorMap[name]) {
-          investorMap[name] = {
-            name,
-            totalInvested: 0,
-            targetReturn: 0,
-            returned: 0,
-            transactions: []
-          };
+          investorMap[name] = { name, totalInvested: 0, targetReturn: 0, returned: 0, transactions: [] };
         }
-
         investorMap[name].transactions.push(tx);
-
         if (tx.type === 'Інвестиція') {
           investorMap[name].totalInvested += Number(tx.amount) || 0;
           investorMap[name].targetReturn += Number(tx.returnAmount || tx.amount) || 0;
@@ -230,17 +264,12 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         }
       }
     });
-
-    return Object.values(investorMap).map(inv => ({
-      ...inv,
-      debtRemaining: inv.targetReturn - inv.returned
-    }));
+    return Object.values(investorMap).map(inv => ({ ...inv, debtRemaining: inv.targetReturn - inv.returned }));
   };
 
   const investorsData = getInvestorsAnalytics();
   const grandTotalInvested = investorsData.reduce((s, i) => s + i.totalInvested, 0);
 
-  // Фільтрація операцій
   const filteredTransactions = allTransactions.filter(tx => {
     const matchesSearch = !searchQuery.trim() || 
       (tx.comment || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -418,7 +447,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       </div>
 
-      {/* НОВИЙ БЛОК: БАЛАНС ВИРОБНИКІВ (МІЛА ТА ВАЛЕРІЙ) */}
+      {/* БЛОК: БАЛАНС ВИРОБНИКІВ З ПОВНИМ РЕДАГУВАННЯМ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Картка Міла */}
         <div className="bg-indigo-50/40 p-4 rounded-2xl border border-indigo-200 shadow-xs space-y-3">
@@ -437,6 +466,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               <div className="flex items-center gap-1">
                 <input 
                   type="number"
+                  step="any"
                   value={milaAdvanceInput}
                   onChange={e => setMilaAdvanceInput(e.target.value)}
                   className="w-20 px-1.5 py-0.5 bg-white border border-indigo-300 rounded text-xs"
@@ -453,10 +483,40 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               <span className="text-[10px] text-slate-500 font-semibold block">Внесений аванс:</span>
               <span className="font-bold text-slate-900">{milaAdvance.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</span>
             </div>
+            
             <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100 space-y-0.5">
-              <span className="text-[10px] text-slate-500 font-semibold block">Використано (пошиття):</span>
-              <span className="font-bold text-rose-600">-{milaOrdersCost.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</span>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-slate-500 font-semibold">Використано:</span>
+                {!isEditingMilaExtra ? (
+                  <button 
+                    onClick={() => { setIsEditingMilaExtra(true); setMilaExtraInput(String(milaExtraCost)); }}
+                    className="text-[9px] text-indigo-600 underline cursor-pointer"
+                    title="Додати додаткові витрати/розробку"
+                  >
+                    змінити
+                  </button>
+                ) : null}
+              </div>
+
+              {!isEditingMilaExtra ? (
+                <span className="font-bold text-rose-600 block">-{totalMilaUsed.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</span>
+              ) : (
+                <div className="flex items-center gap-1 pt-1">
+                  <input 
+                    type="number"
+                    step="any"
+                    value={milaExtraInput}
+                    onChange={e => setMilaExtraInput(e.target.value)}
+                    className="w-16 px-1 py-0.5 border rounded text-xs"
+                    placeholder="Дод. витрати"
+                    autoFocus
+                  />
+                  <button onClick={handleSaveMilaExtra} className="text-emerald-600"><Check size={12} /></button>
+                  <button onClick={() => setIsEditingMilaExtra(false)} className="text-slate-400"><X size={12} /></button>
+                </div>
+              )}
             </div>
+
             <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100 space-y-0.5">
               <span className="text-[10px] text-slate-500 font-semibold block">Залишок у Міли:</span>
               <span className={`font-bold text-sm ${milaRemainingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -464,7 +524,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               </span>
             </div>
           </div>
-          <p className="text-[10px] text-indigo-900/70 font-medium">Витрати на пошиття автоматично мінусуються з авансу.</p>
+          <p className="text-[10px] text-indigo-900/70 font-medium">Автоматично мінусується пошиття + можна додавати витрати на розробку.</p>
         </div>
 
         {/* Картка Валерій */}
@@ -473,15 +533,46 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <span className="font-extrabold text-purple-950 text-sm flex items-center gap-1.5">
               <Users size={16} className="text-purple-600" /> Виробник: Валерій (Тижнева оплата)
             </span>
+            {!isEditingValeriy ? (
+              <button 
+                onClick={() => { setIsEditingValeriy(true); setValeriyInput(String(valeriyTotalToPay)); }}
+                className="text-[10px] text-purple-700 bg-purple-100 hover:bg-purple-200 px-2 py-1 rounded-lg font-semibold transition cursor-pointer"
+              >
+                Змінити суму
+              </button>
+            ) : (
+              <div className="flex items-center gap-1">
+                <input 
+                  type="number"
+                  step="any"
+                  value={valeriyInput}
+                  onChange={e => setValeriyInput(e.target.value)}
+                  className="w-20 px-1.5 py-0.5 bg-white border border-purple-300 rounded text-xs"
+                  autoFocus
+                />
+                <button onClick={handleSaveValeriy} className="p-1 bg-emerald-600 text-white rounded"><Check size={12} /></button>
+                <button onClick={() => setIsEditingValeriy(false)} className="p-1 bg-slate-200 text-slate-700 rounded"><X size={12} /></button>
+              </div>
+            )}
           </div>
 
           <div className="bg-white/90 p-3 rounded-xl border border-purple-100 space-y-1">
-            <span className="text-[10px] text-slate-500 font-semibold block">Сума до виплати за пошитий товар:</span>
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] text-slate-500 font-semibold">Сума до виплати за тиждень:</span>
+              {valeriyManualOverride !== null && (
+                <button 
+                  onClick={() => { setValeriyManualOverride(null); try { setDoc(doc(db, 'settings', 'valeriy_manual_override'), { value: null }); } catch(e){} }}
+                  className="text-[9px] text-purple-600 underline cursor-pointer"
+                >
+                  скинути до авто
+                </button>
+              )}
+            </div>
             <div className="text-xl font-black text-purple-900">
-              {valeriyOrdersCost.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн
+              {valeriyTotalToPay.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн
             </div>
           </div>
-          <p className="text-[10px] text-purple-900/70 font-medium">Сума накопичується за замовленнями, де виробник вказаний як Валерій.</p>
+          <p className="text-[10px] text-purple-900/70 font-medium">Можна редагувати вручну або використовувати суму пошитих замовлень.</p>
         </div>
       </div>
 

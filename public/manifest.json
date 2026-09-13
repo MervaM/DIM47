@@ -1,0 +1,16 @@
+{
+  "short_name": "DIM47",
+  "name": "DIM47 Custom Footwear",
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "type": "image/jpeg",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "display": "standalone"
+}

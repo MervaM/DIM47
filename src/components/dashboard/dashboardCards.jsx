@@ -4,6 +4,7 @@ import { Edit2, Trash2, Check, Copy } from 'lucide-react';
 export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [editingTtnId, setEditingTtnId] = useState(null);
   const [ttnValues, setTtnValues] = useState({});
+  const [copiedTtnId, setCopiedTtnId] = useState(null);
 
   const statusOptions = ['Нове', 'В роботі', 'З наявності', 'Доставка', 'Успішно', 'Відмова'];
 
@@ -37,6 +38,15 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     setEditingTtnId(null);
   };
 
+  const handleCopyTtn = (orderId, ttnText) => {
+    if (!ttnText) return;
+    navigator.clipboard.writeText(ttnText);
+    setCopiedTtnId(orderId);
+    setTimeout(() => {
+      setCopiedTtnId(null);
+    }, 1500);
+  };
+
   if (orders.length === 0) {
     return (
       <div className="text-center py-10 text-slate-400 text-xs bg-white rounded-2xl border border-slate-100">
@@ -51,7 +61,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
         const remainingPayment = (Number(order.price) || 0) - (Number(order.advance) || 0);
         const isEditingTtn = editingTtnId === order.id;
 
-        // Нормалізуємо масив кольорів (підтримуємо і старий рядок order.colorImage, і новий масив order.colorImages)
         let colorsArr = [];
         if (Array.isArray(order.colorImages) && order.colorImages.length > 0) {
           colorsArr = order.colorImages;
@@ -113,7 +122,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               )}
 
-              {/* Зразки кольорів (1, 2 або 3 квадрати на смужці) */}
+              {/* Зразки кольорів */}
               {colorsArr.length > 0 && (
                 <div className={`w-full h-24 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 grid ${
                   colorsArr.length === 1 ? 'grid-cols-1' : 
@@ -146,7 +155,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 <button 
                   type="button" 
                   onClick={() => onEditModal(order)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 p-1 border rounded-lg bg-white"
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 p-1 border rounded-lg bg-white cursor-pointer"
                   title="Редагувати дані клієнта"
                 >
                   <Copy size={13} />
@@ -159,11 +168,34 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               </div>
 
-              {/* Блок ТТН */}
+              {/* Блок ТТН з можливістю копіювання */}
               <div className="border border-dashed border-slate-200 rounded-xl p-2.5 space-y-2 bg-white text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-500 uppercase tracking-wider">TTH:</span>
-                  {!isEditingTtn && (
+                  
+                  {order.ttn && !isEditingTtn ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyTtn(order.id, order.ttn)}
+                        className="font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                        title="Скопіювати ТТН"
+                      >
+                        {order.ttn}
+                        <Copy size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTtnValues({ ...ttnValues, [order.id]: order.ttn || '' });
+                          setEditingTtnId(order.id);
+                        }}
+                        className="text-[10px] text-slate-400 hover:text-slate-600 underline cursor-pointer"
+                      >
+                        змінити
+                      </button>
+                    </div>
+                  ) : !isEditingTtn ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -172,10 +204,16 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                       }}
                       className="font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
                     >
-                      {order.ttn ? order.ttn : '+ Додати ТТН'}
+                      + Додати ТТН
                     </button>
-                  )}
+                  ) : null}
                 </div>
+
+                {copiedTtnId === order.id && (
+                  <div className="text-[10px] font-bold text-emerald-600 text-center animate-pulse">
+                    ТТН скопійовано в буфер обміну!
+                  </div>
+                )}
 
                 {isEditingTtn && (
                   <div className="space-y-2.5 pt-1 border-t border-slate-100">
@@ -188,13 +226,22 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                       autoFocus
                     />
 
-                    <button
-                      type="button"
-                      onClick={() => handleTtnSave(order)}
-                      className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    >
-                      <Check size={14} /> Зберегти ТТН
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingTtnId(null)}
+                        className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg text-xs cursor-pointer"
+                      >
+                        Скасувати
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTtnSave(order)}
+                        className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Check size={14} /> Зберегти
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

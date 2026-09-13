@@ -5,6 +5,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
   const [editingTtnId, setEditingTtnId] = useState(null);
   const [ttnValues, setTtnValues] = useState({});
   const [copiedTtnId, setCopiedTtnId] = useState(null);
+  const [copiedClientId, setCopiedClientId] = useState(null);
 
   const statusOptions = ['Нове', 'В роботі', 'З наявності', 'Доставка', 'Успішно', 'Відмова'];
 
@@ -44,6 +45,23 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     setCopiedTtnId(orderId);
     setTimeout(() => {
       setCopiedTtnId(null);
+    }, 1500);
+  };
+
+  // Функція копіювання даних покупця одним повідомленням
+  const handleCopyClientInfo = (order) => {
+    const clientName = order.client || order.clientName || 'Клієнт';
+    const clientPhone = order.phone || '—';
+    const city = order.city || '';
+    const address = order.warehouse || order.address || '';
+    const fullAddress = [city, address].filter(Boolean).join(', ');
+
+    const textToCopy = `${clientName}\n${clientPhone}\n${fullAddress}`;
+
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedClientId(order.id);
+    setTimeout(() => {
+      setCopiedClientId(null);
     }, 1500);
   };
 
@@ -150,16 +168,22 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </p>
               </div>
 
-              {/* Дані клієнта */}
+              {/* Дані клієнта з можливістю копіювання */}
               <div className="bg-slate-50/60 rounded-2xl p-3.5 text-center relative border border-slate-100 space-y-1">
                 <button 
                   type="button" 
-                  onClick={() => onEditModal(order)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 p-1 border rounded-lg bg-white cursor-pointer"
-                  title="Редагувати дані клієнта"
+                  onClick={() => handleCopyClientInfo(order)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 p-1 border rounded-lg bg-white cursor-pointer transition active:scale-95"
+                  title="Скопіювати дані покупця"
                 >
                   <Copy size={13} />
                 </button>
+
+                {copiedClientId === order.id && (
+                  <div className="absolute top-1 left-0 right-0 text-[10px] font-bold text-emerald-600 bg-emerald-50 py-0.5 rounded-t-2xl animate-pulse">
+                    Дані покупця скопійовано!
+                  </div>
+                )}
 
                 <div className="font-bold text-slate-900 text-base">{order.client || order.clientName || 'Клієнт'}</div>
                 <div className="text-xs font-semibold text-slate-600">{order.phone || '—'}</div>

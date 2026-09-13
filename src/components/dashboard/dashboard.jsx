@@ -108,6 +108,7 @@ export default function Dashboard() {
           cost: item.cost || '',
           image: item.productImage || item.image || '',
           colorImage: item.colorImage || '',
+          colorImages: item.colorImages || (item.colorImage ? [item.colorImage] : []), // Зчитуємо масив кольорів
           createdAt: item.createdAt || '',
           stockItemId: item.stockItemId || '',
           usedBox: item.usedBox || '',
@@ -204,7 +205,8 @@ export default function Dashboard() {
         filling: orderData.lining || '',
         price: Number(orderData.price) || 0,
         productImage: orderData.image || '',
-        colorImage: orderData.colorImage || '',
+        colorImage: orderData.colorImages?.[0] || orderData.colorImage || '',
+        colorImages: orderData.colorImages || [], // Зберігаємо масив зразків кольорів у базу
         stockItemId: orderData.stockItemId || '',
         supplier: orderData.supplier || 'Міла',
         packagingSource: orderData.packagingSource || 'Міла',
@@ -245,7 +247,6 @@ export default function Dashboard() {
       const orderToDelete = orders.find(o => o.id === id);
 
       if (orderToDelete) {
-        // 1. Повертаємо пакування назад на склад (розподіляємо по джерелах списання)
         const packagingSource = orderToDelete.packagingSource || orderToDelete.supplier || 'Міла';
         const usedBox = orderToDelete.usedBox;
         const usedDustbag = orderToDelete.usedDustbag;
@@ -256,7 +257,6 @@ export default function Dashboard() {
           const itemData = docSnap.data();
           const stockRef = doc(db, "stock", docSnap.id);
 
-          // Повертаємо коробку
           if (usedBox && usedBox !== 'Без коробки' && itemData.name === usedBox) {
             const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
             const currentQty = Number(currentSuppliers[packagingSource]) || 0;
@@ -267,7 +267,6 @@ export default function Dashboard() {
             await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
           }
 
-          // Повертаємо пильовик
           if (usedDustbag && usedDustbag !== 'Без пильовика' && itemData.name === usedDustbag) {
             const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
             const currentQty = Number(currentSuppliers[packagingSource]) || 0;
@@ -279,7 +278,6 @@ export default function Dashboard() {
           }
         }
 
-        // 2. Якщо замовлення було з наявності — повертаємо пару назад у наявність
         if (orderToDelete.status === 'З наявності' || orderToDelete.stockItemId) {
           await addDoc(collection(db, "stock"), {
             folderId: 'availability',
@@ -296,7 +294,6 @@ export default function Dashboard() {
           });
         }
 
-        // 3. Видаляємо саме замовлення з бази
         await deleteDoc(doc(db, "orders", id));
         setOrders(prevOrders => prevOrders.filter(o => o.id !== id));
         await fetchStockProducts();

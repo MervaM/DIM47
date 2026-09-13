@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, ShoppingCart, Package, DollarSign, Sparkles, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, DollarSign, Menu, X } from 'lucide-react';
+import logoImg from '../../logo.jpg';
 
 export default function Header({ activeTab, setActiveTab }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -13,9 +14,16 @@ export default function Header({ activeTab, setActiveTab }) {
 
   return (
     <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3 flex items-center justify-between sticky top-0 z-50 shadow-sm w-full shrink-0">
-      {/* Логотип */}
-      <div className="flex items-center gap-2 text-xl font-extrabold text-slate-900 tracking-wider">
-        <span className="bg-slate-900 text-white p-1.5 rounded-xl text-sm"><Sparkles size={18} /></span>
+      {/* Логотип та назва */}
+      <div 
+        className="flex items-center gap-2.5 text-xl font-extrabold text-slate-900 tracking-wider cursor-pointer"
+        onClick={() => setActiveTab('dashboard')}
+      >
+        <img 
+          src={logoImg} 
+          alt="DIM47" 
+          className="w-9 h-9 object-cover rounded-xl border border-slate-200 shadow-2xs" 
+        />
         DIM47
       </div>
 
@@ -28,7 +36,7 @@ export default function Header({ activeTab, setActiveTab }) {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition cursor-pointer ${
                 isActive 
                   ? 'bg-slate-900 text-white shadow-sm' 
                   : 'text-slate-600 hover:bg-slate-100'
@@ -44,7 +52,7 @@ export default function Header({ activeTab, setActiveTab }) {
       <div className="md:hidden">
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 text-slate-700 hover:bg-slate-100 rounded-xl transition"
+          className="p-2 text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
           aria-label="Меню"
         >
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -69,7 +77,7 @@ export default function Header({ activeTab, setActiveTab }) {
                     setActiveTab(item.id);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition cursor-pointer ${
                     isActive 
                       ? 'bg-slate-900 text-white shadow-sm' 
                       : 'text-slate-600 hover:bg-slate-50'

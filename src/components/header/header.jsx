@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LayoutDashboard, ShoppingCart, Package, DollarSign, Menu, X } from 'lucide-react';
-import logoImg from '../../logo.jpg';
+import logoImg from '../../assets/logo.jpg';
 
 export default function Header({ activeTab, setActiveTab }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -14,7 +14,7 @@ export default function Header({ activeTab, setActiveTab }) {
 
   return (
     <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3 flex items-center justify-between sticky top-0 z-50 shadow-sm w-full shrink-0">
-      {/* Логотип та назва */}
+      {/* Логотип */}
       <div 
         className="flex items-center gap-2.5 text-xl font-extrabold text-slate-900 tracking-wider cursor-pointer"
         onClick={() => setActiveTab('dashboard')}
@@ -27,7 +27,7 @@ export default function Header({ activeTab, setActiveTab }) {
         DIM47
       </div>
 
-      {/* Навігація для великих екранів (Десктоп) */}
+      {/* Навігація для десктопа */}
       <nav className="hidden md:flex items-center gap-2">
         {navItems.map(item => {
           const Icon = item.icon;
@@ -48,7 +48,7 @@ export default function Header({ activeTab, setActiveTab }) {
         })}
       </nav>
 
-      {/* Кнопка бургера для мобільних пристроїв */}
+      {/* Кнопка мобільного меню */}
       <div className="md:hidden">
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}

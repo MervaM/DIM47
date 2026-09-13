@@ -1,13 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Search, Image as ImageIcon, Wand2, Package, Plus } from 'lucide-react';
+import { X, Upload, Search, Image as ImageIcon, Wand2, Package } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
-export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
+export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], editingOrder = null }) {
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
-  
-  // Зберігаємо масив кольорів (від 1 до 3)
   const [colorImages, setColorImages] = useState([]);
   
   const [size, setSize] = useState('');
@@ -16,15 +14,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [color, setColor] = useState('');
   const [lining, setLining] = useState('');
   
-  // Виробник та Джерело пакування
   const [supplier, setSupplier] = useState('Міла');
   const [packagingSource, setPackagingSource] = useState('Міла');
 
-  // Опції пакування (коробка / пильовик)
   const [includeBox, setIncludeBox] = useState(true);
   const [includeDustbag, setIncludeDustbag] = useState(true);
 
-  // Фіксація матеріалу для вибору палітри відповідно до виробника
   const [paletteMaterialTab, setPaletteMaterialTab] = useState('Шкіра');
 
   const [placeholders, setPlaceholders] = useState({
@@ -59,19 +54,56 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
   useEffect(() => {
     if (isOpen) {
-      setAdvance('300');
-      setSelectedStockItemId(null);
+      if (editingOrder) {
+        // Режим редагування: заповнюємо існуючими даними
+        setName(editingOrder.name || editingOrder.productTitle || '');
+        setImage(editingOrder.image || '');
+        setColorImages(editingOrder.colorImages || (editingOrder.colorImage ? [editingOrder.colorImage] : []));
+        setSize(editingOrder.size || '');
+        setMaterial(editingOrder.material || '');
+        setSole(editingOrder.sole || '');
+        setColor(editingOrder.color || editingOrder.colorText || '');
+        setLining(editingOrder.lining || editingOrder.filling || '');
+        setSupplier(editingOrder.supplier || 'Міла');
+        setPackagingSource(editingOrder.packagingSource || editingOrder.supplier || 'Міла');
+        setClientName(editingOrder.clientName || editingOrder.client || '');
+        setPhone(editingOrder.phone || '');
+        setCity(editingOrder.city || '');
+        setAddress(editingOrder.address || editingOrder.warehouse || '');
+        setPrice(editingOrder.price !== undefined ? String(editingOrder.price) : '');
+        setAdvance(editingOrder.advance !== undefined ? String(editingOrder.advance) : '300');
+        setComment(editingOrder.comment || editingOrder.note || '');
+      } else {
+        // Режим створення нового
+        setName('');
+        setImage('');
+        setColorImages([]);
+        setSize('');
+        setMaterial('');
+        setSole('');
+        setColor('');
+        setLining('');
+        setSupplier('Міла');
+        setPackagingSource('Міла');
+        setIncludeBox(true);
+        setIncludeDustbag(true);
+        setClientName('');
+        setPhone('');
+        setCity('');
+        setAddress('');
+        setSmartText('');
+        setAdvance('300');
+        setDiscount('0');
+        setComment('');
+        setPrice('');
+        setSelectedStockItemId(null);
+        setPaletteMaterialTab('Шкіра');
+        setPlaceholders({ size: '', material: '', sole: '', color: '' });
+      }
       setStockFolderFilter('shoes');
       setStockSupplierFilter('all');
-      setSupplier('Міла');
-      setPackagingSource('Міла'); 
-      setIncludeBox(true);
-      setIncludeDustbag(true);
-      setPaletteMaterialTab('Шкіра');
-      setColorImages([]);
-      setPlaceholders({ size: '', material: '', sole: '', color: '' });
     }
-  }, [isOpen]);
+  }, [isOpen, editingOrder]);
 
   const handleSupplierChange = (newSupplier) => {
     setSupplier(newSupplier);
@@ -303,57 +335,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setIsStockImagesOpen(false);
   };
 
-  const deductPackaging = async (source, needBox, needDustbag) => {
-    if (!needBox && !needDustbag) return;
-    const targetSource = source || 'Міла';
-
-    try {
-      const boxItem = stock.find(i => i.folderId === 'boxes');
-      const dustbagItem = stock.find(i => i.folderId === 'dustbags');
-
-      if (needBox && boxItem) {
-        const boxRef = doc(db, 'stock', String(boxItem.id));
-        const boxSnap = await getDoc(boxRef);
-        if (boxSnap.exists()) {
-          const data = boxSnap.data();
-          const currentSuppliers = data.suppliers || { 'Основний склад': data.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-          const currentQty = Number(currentSuppliers[targetSource]) || 0;
-          
-          if (currentQty > 0) {
-            currentSuppliers[targetSource] = currentQty - 1;
-            const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
-            await updateDoc(boxRef, { suppliers: currentSuppliers, quantity: newTotalQty });
-          }
-        }
-      }
-
-      if (needDustbag && dustbagItem) {
-        const dustRef = doc(db, 'stock', String(dustbagItem.id));
-        const dustSnap = await getDoc(dustRef);
-        if (dustSnap.exists()) {
-          const data = dustSnap.data();
-          const currentSuppliers = data.suppliers || { 'Основний склад': data.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-          const currentQty = Number(currentSuppliers[targetSource]) || 0;
-          
-          if (currentQty > 0) {
-            currentSuppliers[targetSource] = currentQty - 1;
-            const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
-            await updateDoc(dustRef, { suppliers: currentSuppliers, quantity: newTotalQty });
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Помилка списання пакування:', err);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const newOrder = {
-      id: Date.now(),
+    const orderData = {
+      id: editingOrder ? editingOrder.id : Date.now(),
       name,
       image,
-      colorImages, // Зберігаємо масив зразків кольорів
+      colorImages,
       size,
       material,
       sole,
@@ -372,15 +360,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       discount: Number(discount) || 0,
       comment,
       price: Number(price) || 0,
-      stockItemId: selectedStockItemId,
-      status: 'нове',
-      createdAt: new Date().toISOString()
+      stockItemId: editingOrder ? editingOrder.stockItemId : selectedStockItemId,
+      status: editingOrder ? editingOrder.status : 'нове',
+      createdAt: editingOrder ? editingOrder.createdAt : new Date().toISOString()
     };
 
-    await deductPackaging(packagingSource, includeBox, includeDustbag);
-
     if (typeof onSave === 'function') {
-      onSave(newOrder);
+      onSave(orderData);
     }
     handleClose();
   };
@@ -397,7 +383,9 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <h2 className="text-xl font-bold text-slate-900">Нове замовлення</h2>
+          <h2 className="text-xl font-bold text-slate-900">
+            {editingOrder ? 'Редагувати замовлення' : 'Нове замовлення'}
+          </h2>
           <button 
             type="button"
             onClick={(e) => {
@@ -435,7 +423,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               </div>
             </div>
 
-            {/* Блок вибору зразків кольорів (до 3 штук) */}
             <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2">
               <span className="text-xs font-semibold text-slate-700">Зразки кольорів ({colorImages.length}/3)</span>
               
@@ -677,7 +664,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
 
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={handleClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">Скасувати</button>
-            <button type="submit" className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer">Зберегти</button>
+            <button type="submit" className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer">Зберегти зміни</button>
           </div>
         </form>
       </div>

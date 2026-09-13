@@ -14,7 +14,7 @@ import {
 
 export default function Dashboard() {
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [orders, setOrders] = useState([]);
   const [stockProducts, setStockProducts] = useState([]);
   const [activeFilter, setActiveFilter] = useState('Всі');
@@ -88,27 +88,28 @@ export default function Dashboard() {
           id: id,
           date: item.date || new Date().toLocaleDateString('uk-UA'),
           status: item.status || 'Нове',
-          client: item.clientName || item.client || '',
+          clientName: item.clientName || item.client || '',
           phone: item.clientPhone || item.phone || '',
           city: item.city || '',
           warehouse: item.warehouse || '',
+          address: item.warehouse || '',
           ttn: item.ttn || '',
           advance: item.advance !== undefined ? item.advance : 0,
           discount: item.discount || '',
-          payment: item.paymentType || item.payment || '',
-          note: item.note || '',
-          productTitle: item.productTitle || item.name || '',
+          paymentType: item.paymentType || item.payment || '',
+          comment: item.note || '',
+          name: item.productTitle || item.name || '',
           size: item.size || '',
-          colorText: item.colorText || item.color || '',
+          color: item.colorText || item.color || '',
           material: item.material || '',
           sole: item.sole || '',
-          filling: item.filling || item.lining || '',
+          lining: item.filling || item.lining || '',
           price: item.price !== undefined ? item.price : 0,
           salePrice: item.salePrice || '',
           cost: item.cost || '',
           image: item.productImage || item.image || '',
           colorImage: item.colorImage || '',
-          colorImages: item.colorImages || (item.colorImage ? [item.colorImage] : []), // Зчитуємо масив кольорів
+          colorImages: item.colorImages || (item.colorImage ? [item.colorImage] : []),
           createdAt: item.createdAt || '',
           stockItemId: item.stockItemId || '',
           usedBox: item.usedBox || '',
@@ -129,12 +130,12 @@ export default function Dashboard() {
   };
 
   const handleOpenCreateModal = () => {
-    setEditingId(null);
+    setEditingOrder(null);
     setShowNewOrderModal(true);
   };
 
   const handleEditOrderModal = (order) => {
-    setEditingId(order.id);
+    setEditingOrder(order);
     setShowNewOrderModal(true);
   };
 
@@ -156,37 +157,16 @@ export default function Dashboard() {
       };
 
       await updateDoc(orderRef, updateData);
-
-      if (updatedOrder.selectedBox && updatedOrder.selectedBox !== 'Без коробки') {
-        const stockSnap = await getDocs(collection(db, "stock"));
-        stockSnap.forEach(async (docSnap) => {
-          if (docSnap.data().name === updatedOrder.selectedBox) {
-            await updateDoc(doc(db, "stock", docSnap.id), { quantity: increment(-1) });
-          }
-        });
-      }
-
-      if (updatedOrder.selectedDustbag && updatedOrder.selectedDustbag !== 'Без пильовика') {
-        const stockSnap = await getDocs(collection(db, "stock"));
-        stockSnap.forEach(async (docSnap) => {
-          if (docSnap.data().name === updatedOrder.selectedDustbag) {
-            await updateDoc(doc(db, "stock", docSnap.id), { quantity: increment(-1) });
-          }
-        });
-      }
-
       await fetchOrders();
       await fetchStockProducts();
     } catch (error) {
-      console.error('Помилка оновлення картки та списування:', error);
+      console.error('Помилка оновлення картки:', error);
       alert('Не вдалося зберегти зміни');
     }
   };
 
   const handleSaveOrder = async (orderData) => {
     try {
-      const initialStatus = orderData.stockItemId ? 'З наявності' : 'Нове';
-
       const dbPayload = {
         clientName: orderData.clientName || 'Без імені',
         clientPhone: orderData.phone || '—',
@@ -205,23 +185,24 @@ export default function Dashboard() {
         filling: orderData.lining || '',
         price: Number(orderData.price) || 0,
         productImage: orderData.image || '',
+        colorImages: orderData.colorImages || [],
         colorImage: orderData.colorImages?.[0] || orderData.colorImage || '',
-        colorImages: orderData.colorImages || [], // Зберігаємо масив зразків кольорів у базу
         stockItemId: orderData.stockItemId || '',
         supplier: orderData.supplier || 'Міла',
         packagingSource: orderData.packagingSource || 'Міла',
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
 
-      if (orderData.stockItemId) {
+      if (orderData.stockItemId && !editingOrder) {
         await deleteDoc(doc(db, "stock", orderData.stockItemId));
         await fetchStockProducts();
       }
 
-      if (editingId) {
-        const orderRef = doc(db, "orders", editingId);
+      if (editingOrder) {
+        const orderRef = doc(db, "orders", editingOrder.id);
         await updateDoc(orderRef, dbPayload);
       } else {
+        const initialStatus = orderData.stockItemId ? 'З наявності' : 'Нове';
         const newDbPayload = {
           ...dbPayload,
           date: new Date().toLocaleDateString('uk-UA'),
@@ -233,7 +214,7 @@ export default function Dashboard() {
 
       await fetchOrders();
       setShowNewOrderModal(false);
-      setEditingId(null);
+      setEditingOrder(null);
     } catch (error) {
       console.error('Помилка збереження:', error);
       alert('Не вдалося зберегти замовлення');
@@ -413,9 +394,13 @@ export default function Dashboard() {
 
       <NewOrderModal 
         isOpen={showNewOrderModal}
-        onClose={() => setShowNewOrderModal(false)}
+        onClose={() => {
+          setShowNewOrderModal(false);
+          setEditingOrder(null);
+        }}
         onSave={handleSaveOrder}
         stock={stockProducts}
+        editingOrder={editingOrder}
       />
     </div>
   );

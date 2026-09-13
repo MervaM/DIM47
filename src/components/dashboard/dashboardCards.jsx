@@ -51,6 +51,14 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
         const remainingPayment = (Number(order.price) || 0) - (Number(order.advance) || 0);
         const isEditingTtn = editingTtnId === order.id;
 
+        // Нормалізуємо масив кольорів (підтримуємо і старий рядок order.colorImage, і новий масив order.colorImages)
+        let colorsArr = [];
+        if (Array.isArray(order.colorImages) && order.colorImages.length > 0) {
+          colorsArr = order.colorImages;
+        } else if (order.colorImage) {
+          colorsArr = [order.colorImage];
+        }
+
         return (
           <div 
             key={order.id}
@@ -105,10 +113,17 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               )}
 
-              {/* Зразок кольору / матеріалу */}
-              {order.colorImage && (
-                <div className="w-full h-24 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 flex items-center justify-center">
-                  <img src={order.colorImage} alt="Колір" className="w-full h-full object-cover" />
+              {/* Зразки кольорів (1, 2 або 3 квадрати на смужці) */}
+              {colorsArr.length > 0 && (
+                <div className={`w-full h-24 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 grid ${
+                  colorsArr.length === 1 ? 'grid-cols-1' : 
+                  colorsArr.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
+                } gap-0.5 bg-slate-200`}>
+                  {colorsArr.map((imgSrc, cIdx) => (
+                    <div key={cIdx} className="w-full h-full overflow-hidden bg-white">
+                      <img src={imgSrc} alt="Колір" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -144,7 +159,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               </div>
 
-              {/* Блок ТТН (без коробок та пильовиків) */}
+              {/* Блок ТТН */}
               <div className="border border-dashed border-slate-200 rounded-xl p-2.5 space-y-2 bg-white text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-500 uppercase tracking-wider">TTH:</span>
@@ -185,7 +200,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
               </div>
             </div>
 
-            {/* Блок цін (Залишок зверху, передплата посередині, повна ціна внизу) */}
+            {/* Блок цін */}
             <div className="bg-slate-50/70 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-100">
               <div className="flex justify-between items-center font-bold pb-1.5 border-b border-slate-200/60">
                 <span className="text-emerald-600">Залишок до сплати:</span>

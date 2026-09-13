@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Search, Image as ImageIcon, Wand2, Package } from 'lucide-react';
+import { X, Upload, Search, Image as ImageIcon, Wand2, Package, Plus } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
-  const [colorImage, setColorImage] = useState('');
+  
+  // Зберігаємо масив кольорів (від 1 до 3)
+  const [colorImages, setColorImages] = useState([]);
   
   const [size, setSize] = useState('');
   const [material, setMaterial] = useState('');
@@ -50,7 +52,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
   const [activeImageType, setActiveImageType] = useState(null);
   
   const [stockFolderFilter, setStockFolderFilter] = useState('shoes');
-  // Фільтр виробника у модалці вибору зі складу ('all', 'Міла', 'Валерій')
   const [stockSupplierFilter, setStockSupplierFilter] = useState('all');
 
   const fileInputRef = useRef(null);
@@ -67,6 +68,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       setIncludeBox(true);
       setIncludeDustbag(true);
       setPaletteMaterialTab('Шкіра');
+      setColorImages([]);
       setPlaceholders({ size: '', material: '', sole: '', color: '' });
     }
   }, [isOpen]);
@@ -110,7 +112,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       list = list.filter(item => item.folderId === 'shoes' || !item.folderId);
     }
 
-    // Фільтрація за виробником у вікні вибору зі складу
     if (stockSupplierFilter !== 'all') {
       list = list.filter(item => (item.supplier || item.defaultSupplier || 'Міла') === stockSupplierFilter);
     }
@@ -182,7 +183,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     setAdvance(price);
   };
 
-  // Автоматичне визначення та підстановка виробника при виборі товару
   const applyProductSupplier = (product) => {
     const detectedSupplier = product.supplier || product.defaultSupplier || 'Міла';
     setSupplier(detectedSupplier);
@@ -235,8 +235,13 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        if (type === 'product') setImage(reader.result);
-        else setColorImage(reader.result);
+        if (type === 'product') {
+          setImage(reader.result);
+        } else {
+          if (colorImages.length < 3) {
+            setColorImages(prev => [...prev, reader.result]);
+          }
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -282,8 +287,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
         });
       }
     } else if (activeImageType === 'color') {
-      if (imgUrl) setColorImage(imgUrl);
-      if (product.name) setColor(product.name);
+      if (imgUrl && colorImages.length < 3) {
+        setColorImages(prev => [...prev, imgUrl]);
+      }
+      if (product.name) {
+        setColor(prev => prev ? `${prev}, ${product.name}` : product.name);
+      }
       
       const detectedMaterial = product.materialType || paletteMaterialTab;
       if (detectedMaterial) {
@@ -344,7 +353,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
       id: Date.now(),
       name,
       image,
-      colorImage,
+      colorImages, // Зберігаємо масив зразків кольорів
       size,
       material,
       sole,
@@ -426,24 +435,48 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               </div>
             </div>
 
-            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2.5">
-              <span className="text-xs font-semibold text-slate-700">Зразок кольору</span>
-              {colorImage ? (
-                <div className="relative w-16 h-16">
-                  <img src={colorImage} alt="Колір" className="w-16 h-16 object-cover rounded-lg border shadow-xs" />
-                  <button type="button" onClick={() => setColorImage('')} className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 shadow-xs"><X size={12}/></button>
-                </div>
-              ) : (
-                <div className="w-16 h-16 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400">
-                  <ImageIcon size={24} />
-                </div>
-              )}
+            {/* Блок вибору зразків кольорів (до 3 штук) */}
+            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center gap-2">
+              <span className="text-xs font-semibold text-slate-700">Зразки кольорів ({colorImages.length}/3)</span>
+              
+              <div className="flex gap-1.5 min-h-[4rem] items-center justify-center">
+                {colorImages.map((imgUrl, idx) => (
+                  <div key={idx} className="relative w-11 h-11">
+                    <img src={imgUrl} alt="Колір" className="w-11 h-11 object-cover rounded-lg border shadow-xs" />
+                    <button 
+                      type="button" 
+                      onClick={() => setColorImages(prev => prev.filter((_, i) => i !== idx))} 
+                      className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5 shadow-xs"
+                    >
+                      <X size={10}/>
+                    </button>
+                  </div>
+                ))}
+                {colorImages.length < 3 && (
+                  <div className="w-11 h-11 bg-slate-200/70 rounded-lg flex items-center justify-center text-slate-400 border border-dashed border-slate-300">
+                    <ImageIcon size={18} />
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-1.5 w-full justify-center">
                 <input type="file" ref={colorInputRef} onChange={(e) => handleFileUpload(e, 'color')} className="hidden" accept="image/*" />
-                <button type="button" title="Завантажити з пристрою" onClick={() => colorInputRef.current?.click()} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                <button 
+                  type="button" 
+                  title="Завантажити з пристрою" 
+                  disabled={colorImages.length >= 3} 
+                  onClick={() => colorInputRef.current?.click()} 
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs disabled:opacity-50"
+                >
                   <Upload size={16} />
                 </button>
-                <button type="button" title="Вибрати з палітри" onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs">
+                <button 
+                  type="button" 
+                  title="Вибрати з палітри" 
+                  disabled={colorImages.length >= 3} 
+                  onClick={() => { setActiveImageType('color'); setIsStockImagesOpen(true); }} 
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 cursor-pointer shadow-xs disabled:opacity-50"
+                >
                   <Search size={16} />
                 </button>
               </div>
@@ -500,7 +533,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             )}
           </div>
 
-          {/* Виробник та налаштування пакування (можна змінювати вручну після вибору) */}
           <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -662,13 +694,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
             <div className="flex items-center justify-between pb-2 border-b border-slate-150">
               <h3 className="font-bold text-slate-900 text-sm">
                 {activeImageType === 'color' 
-                  ? `Палітра: ${supplier}` 
+                  ? `Палітра: ${supplier} (${colorImages.length}/3 обрано)` 
                   : 'Виберіть зображення зі складу'}
               </h3>
               <button type="button" onClick={() => setIsStockImagesOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
 
-            {/* Вкладки категорій (Взуття / Наявність) */}
             {activeImageType !== 'color' && (
               <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
                 <button
@@ -688,7 +719,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [] }) {
               </div>
             )}
 
-            {/* Фільтри виробників у модалці вибору зі складу (Всі, Міла, Валерій) */}
             {activeImageType !== 'color' && (
               <div className="flex gap-1 p-1 bg-indigo-50 border border-indigo-100 rounded-xl text-xs">
                 <button

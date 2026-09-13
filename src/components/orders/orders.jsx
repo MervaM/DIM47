@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { db } from "../../firebase";
 import { collection, getDocs } from "firebase/firestore";
+import { Clock } from 'lucide-react';
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState('Всі');
+  const [supplierFilter, setSupplierFilter] = useState('Всі виробники');
   const [loading, setLoading] = useState(true);
 
   const statuses = ['Всі', 'Нове', 'В роботі', 'З наявності', 'Доставка', 'Успішно', 'Відмова'];
+  const suppliers = ['Всі виробники', 'Міла', 'Валерій'];
 
   useEffect(() => {
     fetchOrders();
@@ -29,7 +32,9 @@ export default function Orders() {
           image: item.productImage || item.image || '',
           productTitle: item.productTitle || item.name || 'Взуття',
           size: item.size || '',
-          color: item.colorText || item.color || ''
+          color: item.colorText || item.color || '',
+          supplier: item.supplier || 'Міла',
+          createdAt: item.createdAt || new Date().toISOString()
         });
       });
 
@@ -39,6 +44,16 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Розрахунок кількості днів з моменту створення замовлення
+  const getDaysInWork = (createdAtString) => {
+    if (!createdAtString) return 0;
+    const createdDate = new Date(createdAtString);
+    const now = new Date();
+    const diffTime = Math.abs(now - createdDate);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
   };
 
   const getStatusColor = (status) => {
@@ -61,15 +76,32 @@ export default function Orders() {
   };
 
   const filteredOrders = orders.filter(order => {
-    if (filter === 'Всі') return true;
-    return String(order.status).toLowerCase() === filter.toLowerCase();
+    const matchesStatus = filter === 'Всі' || String(order.status).toLowerCase() === filter.toLowerCase();
+    const matchesSupplier = supplierFilter === 'Всі виробники' || order.supplier === supplierFilter;
+    return matchesStatus && matchesSupplier;
   });
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4">
-      {/* Панель фільтрів як на Дашборді */}
-      <div className="flex justify-end mb-2 overflow-x-auto pb-2">
-        <div className="flex gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs text-xs min-w-max">
+      {/* Панель фільтрів (Статуси + Виробники) */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2">
+        {/* Фільтр по виробниках */}
+        <div className="flex gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs text-xs">
+          {suppliers.map((sup) => (
+            <button
+              key={sup}
+              onClick={() => setSupplierFilter(sup)}
+              className={`px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
+                supplierFilter === sup ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {sup}
+            </button>
+          ))}
+        </div>
+
+        {/* Фільтр по статусах */}
+        <div className="flex gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs text-xs overflow-x-auto max-w-full pb-1">
           {statuses.map((tab) => {
             const count = tab === 'Всі' ? orders.length : orders.filter(o => o.status === tab).length;
             const isActive = filter === tab;
@@ -77,7 +109,7 @@ export default function Orders() {
               <button
                 key={tab}
                 onClick={() => setFilter(tab)}
-                className={`px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                   isActive ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
@@ -99,35 +131,56 @@ export default function Orders() {
             Завантаження замовлень...
           </div>
         ) : filteredOrders.length > 0 ? (
-          filteredOrders.map((order) => (
-            <div 
-              key={order.id} 
-              className="bg-white rounded-2xl border border-slate-200/85 shadow-2xs px-4 py-3.5 flex items-center justify-between gap-4 hover:border-slate-300 transition"
-            >
-              <div className="flex items-center gap-3.5 min-w-0">
-                {order.image ? (
-                  <img src={order.image} alt="" className="w-11 h-11 object-cover rounded-xl border border-slate-200 shrink-0" />
-                ) : (
-                  <div className="w-11 h-11 bg-slate-100 rounded-xl flex items-center justify-center text-[11px] text-slate-400 shrink-0 font-medium border border-slate-200/60">Фото</div>
-                )}
+          filteredOrders.map((order) => {
+            const daysCount = getDaysInWork(order.createdAt);
+            const isStuck = (order.status === 'Нове' || order.status === 'В роботі') && daysCount >= 5;
 
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-slate-900 truncate">{order.clientName}</div>
-                  <div className="text-xs text-slate-500 truncate">{order.productTitle} {order.size ? `(${order.size} розм.)` : ''}</div>
+            return (
+              <div 
+                key={order.id} 
+                className={`bg-white rounded-2xl border shadow-2xs px-4 py-3.5 flex items-center justify-between gap-4 transition ${
+                  isStuck ? 'border-rose-300 bg-rose-50/20' : 'border-slate-200/85 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  {order.image ? (
+                    <img src={order.image} alt="" className="w-11 h-11 object-cover rounded-xl border border-slate-200 shrink-0" />
+                  ) : (
+                    <div className="w-11 h-11 bg-slate-100 rounded-xl flex items-center justify-center text-[11px] text-slate-400 shrink-0 font-medium border border-slate-200/60">Фото</div>
+                  )}
+
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900 truncate">{order.clientName}</span>
+                      <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-md border border-indigo-100">
+                        {order.supplier}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 text-xs text-slate-500 truncate">
+                      <span>{order.productTitle} {order.size ? `(${order.size} розм.)` : ''}</span>
+                      
+                      {/* Лічильник часу / застрягання */}
+                      <span className={`flex items-center gap-1 font-semibold ${isStuck ? 'text-rose-600' : 'text-slate-400'}`}>
+                        <Clock size={12} />
+                        {daysCount === 0 ? 'Сьогодні' : `${daysCount} дн. у роботі`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="text-sm font-bold text-slate-950">
+                    {order.price} грн
+                  </div>
+
+                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(order.status)}`}>
+                    {order.status}
+                  </span>
                 </div>
               </div>
-
-              <div className="flex items-center gap-4 shrink-0">
-                <div className="text-sm font-bold text-slate-950">
-                  {order.price} грн
-                </div>
-
-                <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(order.status)}`}>
-                  {order.status}
-                </span>
-              </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="text-center py-12 text-slate-400 text-sm bg-white rounded-2xl border border-slate-200/80">
             Замовлень у цій категорії немає

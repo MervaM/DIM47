@@ -4,8 +4,6 @@ import { Edit2, Trash2, Check, Copy } from 'lucide-react';
 export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [editingTtnId, setEditingTtnId] = useState(null);
   const [ttnValues, setTtnValues] = useState({});
-  const [boxType, setBoxType] = useState('Коробки (Великі)');
-  const [dustbagType, setDustbagType] = useState('Пильовик (Великі)');
 
   const statusOptions = ['Нове', 'В роботі', 'З наявності', 'Доставка', 'Успішно', 'Відмова'];
 
@@ -33,9 +31,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     if (typeof onInlineSave === 'function') {
       onInlineSave({ 
         ...order, 
-        ttn: newTtn,
-        selectedBox: boxType,
-        selectedDustbag: dustbagType
+        ttn: newTtn
       });
     }
     setEditingTtnId(null);
@@ -54,9 +50,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
       {orders.map((order) => {
         const remainingPayment = (Number(order.price) || 0) - (Number(order.advance) || 0);
         const isEditingTtn = editingTtnId === order.id;
-
-        // Шукаємо виробника по всіх можливих ключах
-        const displaySupplier = order.supplier || order.manufacturer || order.maker || order.factory;
 
         return (
           <div 
@@ -79,10 +72,9 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   ))}
                 </select>
 
-                {/* Бейдж виробника (відобразиться обов'язково, якщо знайдуться дані) */}
-                {displaySupplier && (
+                {order.supplier && (
                   <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-2xs">
-                    Виробник: {displaySupplier}
+                    Виробник: {order.supplier}
                   </span>
                 )}
 
@@ -152,7 +144,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               </div>
 
-              {/* Блок ТТН з вибором коробки та пильовика */}
+              {/* Блок ТТН (без коробок та пильовиків) */}
               <div className="border border-dashed border-slate-200 rounded-xl p-2.5 space-y-2 bg-white text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-500 uppercase tracking-wider">TTH:</span>
@@ -181,59 +173,31 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                       autoFocus
                     />
 
-                    {/* Швидкий вибір пакування */}
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                      <div>
-                        <label className="text-slate-500 font-medium block mb-1">Коробка:</label>
-                        <select 
-                          value={boxType} 
-                          onChange={e => setBoxType(e.target.value)}
-                          className="w-full p-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 font-medium cursor-pointer"
-                        >
-                          <option value="Коробки (Великі)">Велика коробка</option>
-                          <option value="Коробки (Малі)">Мала коробка</option>
-                          <option value="Без коробки">Без коробки</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-medium block mb-1">Пильовик:</label>
-                        <select 
-                          value={dustbagType} 
-                          onChange={e => setDustbagType(e.target.value)}
-                          className="w-full p-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 font-medium cursor-pointer"
-                        >
-                          <option value="Пильовик (Великі)">Великий пильовик</option>
-                          <option value="Пильовик (Малі)">Малий пильовик</option>
-                          <option value="Без пильовика">Без пильовика</option>
-                        </select>
-                      </div>
-                    </div>
-
                     <button
                       type="button"
                       onClick={() => handleTtnSave(order)}
                       className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
                     >
-                      <Check size={14} /> Зберегти та списати пакування
+                      <Check size={14} /> Зберегти ТТН
                     </button>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Блок цін */}
+            {/* Блок цін (Залишок зверху, передплата посередині, повна ціна внизу) */}
             <div className="bg-slate-50/70 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-100">
-              <div className="flex justify-between items-center">
-                <span className="font-semibold text-slate-900">Ціна товару:</span>
-                <span className="font-bold text-slate-900 text-sm">{order.price || 0} грн</span>
+              <div className="flex justify-between items-center font-bold pb-1.5 border-b border-slate-200/60">
+                <span className="text-emerald-600">Залишок до сплати:</span>
+                <span className="text-emerald-600 text-sm">{remainingPayment > 0 ? remainingPayment : 0} грн</span>
               </div>
-              <div className="flex justify-between items-center text-slate-500">
+              <div className="flex justify-between items-center text-slate-500 pt-0.5">
                 <span>Передплата:</span>
                 <span className="font-medium text-slate-700">{order.advance || 0} грн</span>
               </div>
-              <div className="flex justify-between items-center pt-1.5 border-t border-slate-200/60 font-bold">
-                <span className="text-emerald-600">Залишок до сплати:</span>
-                <span className="text-emerald-600 text-sm">{remainingPayment > 0 ? remainingPayment : 0} грн</span>
+              <div className="flex justify-between items-center pt-1.5">
+                <span className="font-semibold text-slate-900">Ціна товару:</span>
+                <span className="font-bold text-slate-900 text-sm">{order.price || 0} грн</span>
               </div>
             </div>
           </div>

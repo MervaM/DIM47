@@ -11,31 +11,33 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
     sizeBox: 'Великі',
     cost: '',
     image: '',
-    totalQty: '',
+    myStockQty: '',
     milaQty: '',
     valeriyQty: ''
   });
 
   const boxesList = stock.filter(item => item.folderId === 'boxes');
 
-  // Обчислюємо скільки залишається на вашому складі в реальному часі
-  const parsedTotal = Number(formData.totalQty) || 0;
+  const parsedMyStock = Number(formData.myStockQty) || 0;
   const parsedMila = Number(formData.milaQty) || 0;
   const parsedValeriy = Number(formData.valeriyQty) || 0;
-  const myStockQty = Math.max(0, parsedTotal - parsedMila - parsedValeriy);
+  const calculatedTotal = parsedMyStock + parsedMila + parsedValeriy;
 
   const handleOpenModal = (item = null) => {
     if (item) {
       setEditingItem(item);
-      const total = item.quantity || 0;
       const mila = item.suppliers?.['Міла'] || 0;
       const valeriy = item.suppliers?.['Валерій'] || 0;
+      const total = item.quantity || 0;
+      const myStock = item.suppliers?.['Основний склад'] !== undefined 
+        ? item.suppliers['Основний склад'] 
+        : Math.max(0, total - mila - valeriy);
 
       setFormData({
         sizeBox: item.sizeBox || 'Великі',
         cost: item.cost || '',
         image: item.image || '',
-        totalQty: total,
+        myStockQty: myStock,
         milaQty: mila,
         valeriyQty: valeriy
       });
@@ -45,7 +47,7 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
         sizeBox: 'Великі',
         cost: '',
         image: '',
-        totalQty: '',
+        myStockQty: '',
         milaQty: '',
         valeriyQty: ''
       });
@@ -73,11 +75,11 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
       folderId: 'boxes',
       name: `Коробки (${formData.sizeBox})`,
       sizeBox: formData.sizeBox,
-      quantity: parsedTotal, // Загальна кількість
+      quantity: calculatedTotal,
       cost: Number(formData.cost) || 0,
       image: formData.image,
       suppliers: {
-        'Основний склад': myStockQty,
+        'Основний склад': parsedMyStock,
         'Міла': parsedMila,
         'Валерій': parsedValeriy
       }
@@ -154,7 +156,6 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
                       Загальна кількість: <span className="font-extrabold text-slate-900">{total} шт</span>
                     </div>
                     
-                    {/* Розподіл залишків */}
                     <div className="flex flex-wrap gap-1.5 text-[10px]">
                       <span className="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded-md border border-slate-200">
                         Мій склад: {myStock} шт
@@ -180,7 +181,6 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
         )}
       </div>
 
-      {/* Модальне вікно редагування / створення */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 flex flex-col gap-4 relative">
@@ -209,23 +209,21 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
                 </select>
               </div>
 
-              {/* Поле: Загальна кількість */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1 text-center">Загальна кількість (шт)</label>
-                <input
-                  type="number"
-                  required
-                  value={formData.totalQty}
-                  onChange={(e) => setFormData(prev => ({ ...prev, totalQty: e.target.value }))}
-                  placeholder="Введіть загальну кількість"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold text-slate-900 text-center text-sm focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              {/* Блок виробників та розрахунку залишку */}
+              {/* Блок з трьома складами */}
               <div className="p-3 bg-indigo-50/40 rounded-2xl border border-indigo-100 space-y-2">
-                <span className="text-[11px] font-bold text-indigo-950 block text-center">Кількість у виробників (шт):</span>
-                <div className="grid grid-cols-2 gap-2">
+                <span className="text-[11px] font-bold text-indigo-950 block text-center">Розподіл за складами (шт):</span>
+                
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5 text-center">Мій склад</label>
+                    <input
+                      type="number"
+                      value={formData.myStockQty}
+                      onChange={(e) => setFormData(prev => ({ ...prev, myStockQty: e.target.value }))}
+                      placeholder="0"
+                      className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-600 mb-0.5 text-center">Міла</label>
                     <input
@@ -233,7 +231,7 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
                       value={formData.milaQty}
                       onChange={(e) => setFormData(prev => ({ ...prev, milaQty: e.target.value }))}
                       placeholder="0"
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div>
@@ -243,16 +241,15 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
                       value={formData.valeriyQty}
                       onChange={(e) => setFormData(prev => ({ ...prev, valeriyQty: e.target.value }))}
                       placeholder="0"
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
 
-                {/* Автоматичний залишок на вашому складі */}
                 <div className="pt-2 border-t border-indigo-100 flex justify-between items-center px-1 text-[11px]">
-                  <span className="text-slate-600 font-medium">Залишок на моєму складі:</span>
+                  <span className="text-slate-600 font-bold">Разом на всіх складах:</span>
                   <span className="font-extrabold text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
-                    {myStockQty} шт
+                    {calculatedTotal} шт
                   </span>
                 </div>
               </div>

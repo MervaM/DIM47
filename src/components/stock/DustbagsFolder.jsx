@@ -11,23 +11,21 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
   const [formPrice, setFormPrice] = useState('');
   const [formImage, setFormImage] = useState('');
   
-  // Кількісні поля
-  const [totalQty, setTotalQty] = useState('');
+  const [myStockQty, setMyStockQty] = useState('');
   const [milaQty, setMilaQty] = useState('');
   const [valeriyQty, setValeriyQty] = useState('');
 
-  // Обчислюємо скільки залишається на вашому складі в реальному часі
-  const parsedTotal = Number(totalQty) || 0;
+  const parsedMyStock = Number(myStockQty) || 0;
   const parsedMila = Number(milaQty) || 0;
   const parsedValeriy = Number(valeriyQty) || 0;
-  const myStockQty = Math.max(0, parsedTotal - parsedMila - parsedValeriy);
+  const calculatedTotal = parsedMyStock + parsedMila + parsedValeriy;
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
     setFormSizeBox('Великі');
     setFormPrice('');
     setFormImage('');
-    setTotalQty('');
+    setMyStockQty('');
     setMilaQty('');
     setValeriyQty('');
     setShowModal(true);
@@ -40,11 +38,14 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
     setFormPrice(item.price !== '' && item.price !== undefined ? item.price : '');
     setFormImage(item.image || '');
     
-    const total = item.quantity || 0;
     const mila = item.suppliers?.['Міла'] || 0;
     const valeriy = item.suppliers?.['Валерій'] || 0;
+    const total = item.quantity || 0;
+    const myStock = item.suppliers?.['Основний склад'] !== undefined 
+      ? item.suppliers['Основний склад'] 
+      : Math.max(0, total - mila - valeriy);
 
-    setTotalQty(total);
+    setMyStockQty(myStock);
     setMilaQty(mila);
     setValeriyQty(valeriy);
     setShowModal(true);
@@ -69,10 +70,10 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
       name: `Пильовик (${formSizeBox})`,
       sizeBox: formSizeBox,
       price: formPrice !== '' ? Number(formPrice) : '',
-      quantity: parsedTotal, // Загальна кількість
+      quantity: calculatedTotal,
       image: formImage,
       suppliers: {
-        'Основний склад': myStockQty,
+        'Основний склад': parsedMyStock,
         'Міла': parsedMila,
         'Валерій': parsedValeriy
       }
@@ -99,7 +100,6 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
         <Plus size={16} /> Додати пильовики
       </button>
 
-      {/* Список картка пильовиків */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {dustbagsList.map(item => {
           const total = item.quantity || 0;
@@ -145,7 +145,6 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
         })}
       </div>
 
-      {/* Модальне вікно редагування */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 flex flex-col gap-4">
@@ -165,23 +164,21 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
                 </select>
               </div>
 
-              {/* Поле: Загальна кількість */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1 text-center">Загальна кількість (шт)</label>
-                <input
-                  type="number"
-                  required
-                  value={totalQty}
-                  onChange={(e) => setTotalQty(e.target.value)}
-                  placeholder="Введіть загальну кількість"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold text-slate-900 text-center text-sm focus:outline-none focus:border-slate-900"
-                />
-              </div>
-
-              {/* Блок з виробниками та відніманням */}
+              {/* Блок складів */}
               <div className="p-3 bg-indigo-50/40 rounded-2xl border border-indigo-100 space-y-2">
-                <span className="text-[11px] font-bold text-indigo-950 block text-center">Кількість у виробників (шт):</span>
-                <div className="grid grid-cols-2 gap-2">
+                <span className="text-[11px] font-bold text-indigo-950 block text-center">Розподіл за складами (шт):</span>
+                
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-0.5 text-center">Мій склад</label>
+                    <input
+                      type="number"
+                      value={myStockQty}
+                      onChange={(e) => setMyStockQty(e.target.value)}
+                      placeholder="0"
+                      className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-600 mb-0.5 text-center">Міла</label>
                     <input
@@ -189,7 +186,7 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
                       value={milaQty}
                       onChange={(e) => setMilaQty(e.target.value)}
                       placeholder="0"
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div>
@@ -199,16 +196,15 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
                       value={valeriyQty}
                       onChange={(e) => setValeriyQty(e.target.value)}
                       placeholder="0"
-                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
 
-                {/* Автоматичний залишок на вашому складі */}
                 <div className="pt-2 border-t border-indigo-100 flex justify-between items-center px-1 text-[11px]">
-                  <span className="text-slate-600 font-medium">Залишок на моєму складі:</span>
+                  <span className="text-slate-600 font-bold">Разом на всіх складах:</span>
                   <span className="font-extrabold text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
-                    {myStockQty} шт
+                    {calculatedTotal} шт
                   </span>
                 </div>
               </div>

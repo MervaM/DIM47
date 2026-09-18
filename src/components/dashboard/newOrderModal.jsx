@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Search, Image as ImageIcon, Wand2, Package } from 'lucide-react';
+import { X, Upload, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -15,10 +15,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
   const [lining, setLining] = useState('');
   
   const [supplier, setSupplier] = useState('Міла');
-  const [packagingSource, setPackagingSource] = useState('Міла');
-
-  const [includeBox, setIncludeBox] = useState(true);
-  const [includeDustbag, setIncludeDustbag] = useState(true);
 
   const [paletteMaterialTab, setPaletteMaterialTab] = useState('Шкіра');
 
@@ -64,7 +60,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
         setColor(editingOrder.color || editingOrder.colorText || '');
         setLining(editingOrder.lining || editingOrder.filling || '');
         setSupplier(editingOrder.supplier || 'Міла');
-        setPackagingSource(editingOrder.packagingSource || editingOrder.supplier || 'Міла');
         setClientName(editingOrder.clientName || editingOrder.client || '');
         setPhone(editingOrder.phone || '');
         setCity(editingOrder.city || '');
@@ -82,9 +77,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
         setColor('');
         setLining('');
         setSupplier('Міла');
-        setPackagingSource('Міла');
-        setIncludeBox(true);
-        setIncludeDustbag(true);
         setClientName('');
         setPhone('');
         setCity('');
@@ -102,11 +94,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
       setStockSupplierFilter('all');
     }
   }, [isOpen, editingOrder]);
-
-  const handleSupplierChange = (newSupplier) => {
-    setSupplier(newSupplier);
-    setPackagingSource(newSupplier);
-  };
 
   const handleClose = () => {
     if (typeof onClose === 'function') {
@@ -155,7 +142,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
     item && item.name && String(item.name).toLowerCase().includes(String(name).toLowerCase())
   );
 
-  // Оновлений та покращений розумний парсер
   const handleSmartClientParse = (eOrText) => {
     const rawText = typeof eOrText === 'string' ? eOrText : (eOrText?.target?.value ?? '');
     setSmartText(rawText);
@@ -163,7 +149,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
 
     let cleanText = rawText;
 
-    // 1. Пошук телефону (усі типи запису)
     const phoneMatch = cleanText.match(/(?:\+?38)?\s*\(?0\d{2}\)?[\s-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}/) || cleanText.match(/0\d{9}/);
     if (phoneMatch) {
       const parsedPhone = phoneMatch[0].replace(/\D/g, '');
@@ -171,7 +156,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
       cleanText = cleanText.replace(phoneMatch[0], ' ');
     }
 
-    // 2. Пошук відділення (Нова Пошта / Укрпошта)
     const addressMatch = 
       cleanText.match(/(?:відділення|відд|пошта|нп|№)\s*[:#-]?\s*\d+/i) || 
       cleanText.match(/№\s*\d+/i) || 
@@ -182,7 +166,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
       cleanText = cleanText.replace(addressMatch[0], ' ');
     }
 
-    // 3. Пошук міста
     const ukraineCities = /Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-Франківськ|Чернівці|Ужгород|Хмельницький|Вінниця|Черкаси|Полтава|Суми|Запоріжжя|Миколаїв|Кропивницький|Луцьк|Чернігів|Ромни|Нововолинськ|Ковель|Володимир|Шостка|Конотоп/i;
     
     const cityMatch = 
@@ -195,7 +178,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
       cleanText = cleanText.replace(cityMatch[0], ' ');
     }
 
-    // 4. Очищення від назв областей та сміттєвих слів
     cleanText = cleanText
       .replace(/(?:Сумська|Київська|Львівська|Харківська|Одеська|Дніпропетровська|Житомирська|Рівненська|Тернопільська|Івано-Франківська|Чернівецька|Закарпатська|Хмельницька|Вінницька|Черкаська|Полтавська|Запорізька|Миколаївська|Кіровоградська|Волинська|Чернігівська)\s*(?:обл\.|область)?/gi, ' ')
       .replace(/(?:район|р-н|обл\.|область|доставка|отримувач|нп|нова пошта|укрпошта|відділення|відд|номер)/gi, ' ')
@@ -203,7 +185,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
       .replace(/\s{2,}/g, ' ')
       .trim();
 
-    // 5. Формування ПІБ з залишків
     const words = cleanText.split(/\s+/).filter(w => w.length > 1);
     if (words.length >= 2) {
       setClientName(words.slice(0, 3).join(' '));
@@ -232,7 +213,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
   const applyProductSupplier = (product) => {
     const detectedSupplier = product.supplier || product.defaultSupplier || 'Міла';
     setSupplier(detectedSupplier);
-    setPackagingSource(detectedSupplier);
   };
 
   const handleSelectProductFromStock = (product) => {
@@ -258,7 +238,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
       setColor(product.color || '');
       setSelectedStockItemId(product.id);
       setPlaceholders({ size: '', material: '', sole: '', color: '' });
-      setPackagingSource('Основний склад');
     } else {
       setSize('');
       setMaterial('');
@@ -318,7 +297,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
         setColor(product.color || '');
         setSelectedStockItemId(product.id);
         setPlaceholders({ size: '', material: '', sole: '', color: '' });
-        setPackagingSource('Основний склад');
       } else {
         setSize('');
         setMaterial('');
@@ -362,9 +340,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
       color,
       lining,
       supplier,
-      packagingSource,
-      includeBox,
-      includeDustbag,
       clientName,
       phone,
       city,
@@ -534,57 +509,16 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
             )}
           </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs font-semibold text-slate-700 mb-1 block">Виробник взуття</label>
-                <select
-                  value={supplier}
-                  onChange={(e) => handleSupplierChange(e.target.value)}
-                  className="w-full px-3 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 cursor-pointer focus:outline-none"
-                >
-                  <option value="Міла">Міла</option>
-                  <option value="Валерій">Валерій</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-700 mb-1 block flex items-center gap-1">
-                  <Package size={14} className="text-slate-500" /> Списати з:
-                </label>
-                <select
-                  value={packagingSource}
-                  onChange={(e) => setPackagingSource(e.target.value)}
-                  className="w-full px-3 py-2 bg-amber-50/80 border border-amber-200 rounded-xl text-xs font-bold text-amber-950 cursor-pointer focus:outline-none"
-                >
-                  <option value="Основний склад">Мій склад (у мене)</option>
-                  <option value="Міла">Міла</option>
-                  <option value="Валерій">Валерій</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 pt-1 border-t border-slate-200/60">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={includeBox}
-                  onChange={(e) => setIncludeBox(e.target.checked)}
-                  className="rounded text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
-                />
-                Коробка
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={includeDustbag}
-                  onChange={(e) => setIncludeDustbag(e.target.checked)}
-                  className="rounded text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
-                />
-                Пильовик
-              </label>
-            </div>
+          <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+            <label className="text-xs font-semibold text-slate-700 mb-1 block">Виробник взуття</label>
+            <select
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+              className="w-full px-3 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 cursor-pointer focus:outline-none"
+            >
+              <option value="Міла">Міла</option>
+              <option value="Валерій">Валерій</option>
+            </select>
           </div>
 
           <div className="space-y-2">

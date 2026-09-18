@@ -114,6 +114,8 @@ export default function Dashboard() {
           stockItemId: item.stockItemId || '',
           usedBox: item.usedBox || '',
           usedDustbag: item.usedDustbag || '',
+          includeBox: item.includeBox ?? true,
+          includeDustbag: item.includeDustbag ?? true,
           packagingSource: item.packagingSource || '',
           supplier: item.supplier || 'Міла',
           productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color || ''}, ${item.material || ''}, ${item.filling || item.sole || ''}`
@@ -139,10 +141,12 @@ export default function Dashboard() {
     setShowNewOrderModal(true);
   };
 
+  // Оновлене збереження з картки (включно з введенням ТТН та списанням упаковки)
   const handleInlineSaveOrder = async (updatedOrder) => {
     try {
       const orderRef = doc(db, "orders", updatedOrder.id);
-      
+      const isNewTtnAdded = updatedOrder.ttn && !orders.find(o => o.id === updatedOrder.id)?.ttn;
+
       const updateData = {
         clientName: updatedOrder.client || updatedOrder.clientName || '',
         clientPhone: updatedOrder.phone || updatedOrder.clientPhone || '',
@@ -151,12 +155,40 @@ export default function Dashboard() {
         ttn: updatedOrder.ttn || '',
         price: Number(updatedOrder.price) || 0,
         advance: Number(updatedOrder.advance) || 0,
-        usedBox: updatedOrder.selectedBox || updatedOrder.usedBox || '',
-        usedDustbag: updatedOrder.selectedDustbag || updatedOrder.usedDustbag || '',
-        supplier: updatedOrder.supplier || 'Міла'
+        supplier: updatedOrder.supplier || 'Міла',
+        packagingSource: updatedOrder.packagingSource || updatedOrder.supplier || 'Міла',
+        includeBox: updatedOrder.includeBox ?? true,
+        includeDustbag: updatedOrder.includeDustbag ?? true
       };
 
       await updateDoc(orderRef, updateData);
+
+      // Якщо вперше ввели ТТН — проводимо списание упаковки зі складу
+      if (isNewTtnAdded) {
+        const source = updatedOrder.packagingSource || updatedOrder.supplier || 'Міла';
+        const stockSnap = await getDocs(collection(db, "stock"));
+
+        for (const docSnap of stockSnap.docs) {
+          const itemData = docSnap.data();
+          const itemName = (itemData.name || '').toLowerCase();
+          const stockRef = doc(db, "stock", docSnap.id);
+
+          const isBox = updatedOrder.includeBox && itemName.includes('коробк');
+          const isDustbag = updatedOrder.includeDustbag && itemName.includes('пильн');
+
+          if (isBox || isDustbag) {
+            const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+            const currentQty = Number(currentSuppliers[source]) || 0;
+
+            if (currentQty > 0) {
+              currentSuppliers[source] = currentQty - 1;
+              const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
+              await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+            }
+          }
+        }
+      }
+
       await fetchOrders();
       await fetchStockProducts();
     } catch (error) {
@@ -189,7 +221,6 @@ export default function Dashboard() {
         colorImage: orderData.colorImages?.[0] || orderData.colorImage || '',
         stockItemId: orderData.stockItemId || '',
         supplier: orderData.supplier || 'Міла',
-        packagingSource: orderData.packagingSource || 'Міла',
         productDetails: `${orderData.size || '—'} розм., ${orderData.color || '—'}, ${orderData.material || '—'}, ${orderData.lining || orderData.sole || '—'}`
       };
 
@@ -229,33 +260,27 @@ export default function Dashboard() {
 
       if (orderToDelete) {
         const packagingSource = orderToDelete.packagingSource || orderToDelete.supplier || 'Міла';
-        const usedBox = orderToDelete.usedBox;
-        const usedDustbag = orderToDelete.usedDustbag;
 
-        const stockSnap = await getDocs(collection(db, "stock"));
-        
-        for (const docSnap of stockSnap.docs) {
-          const itemData = docSnap.data();
-          const stockRef = doc(db, "stock", docSnap.id);
+        if (orderToDelete.ttn) {
+          const stockSnap = await getDocs(collection(db, "stock"));
+          
+          for (const docSnap of stockSnap.docs) {
+            const itemData = docSnap.data();
+            const itemName = (itemData.name || '').toLowerCase();
+            const stockRef = doc(db, "stock", docSnap.id);
 
-          if (usedBox && usedBox !== 'Без коробки' && itemData.name === usedBox) {
-            const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-            const currentQty = Number(currentSuppliers[packagingSource]) || 0;
-            
-            currentSuppliers[packagingSource] = currentQty + 1;
-            const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
-            
-            await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
-          }
+            const isBox = orderToDelete.includeBox && itemName.includes('коробк');
+            const isDustbag = orderToDelete.includeDustbag && itemName.includes('пильн');
 
-          if (usedDustbag && usedDustbag !== 'Без пильовика' && itemData.name === usedDustbag) {
-            const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-            const currentQty = Number(currentSuppliers[packagingSource]) || 0;
-            
-            currentSuppliers[packagingSource] = currentQty + 1;
-            const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
-            
-            await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+            if (isBox || isDustbag) {
+              const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+              const currentQty = Number(currentSuppliers[packagingSource]) || 0;
+              
+              currentSuppliers[packagingSource] = currentQty + 1;
+              const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
+              
+              await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+            }
           }
         }
 
@@ -310,16 +335,29 @@ export default function Dashboard() {
           createdAt: new Date().toISOString()
         });
 
-        const stockSnap = await getDocs(collection(db, "stock"));
-        stockSnap.forEach(async (docSnap) => {
-          const itemData = docSnap.data();
-          if (targetOrder.usedBox && itemData.name === targetOrder.usedBox) {
-            await updateDoc(doc(db, "stock", docSnap.id), { quantity: increment(1) });
+        if (targetOrder.ttn) {
+          const packagingSource = targetOrder.packagingSource || targetOrder.supplier || 'Міла';
+          const stockSnap = await getDocs(collection(db, "stock"));
+
+          for (const docSnap of stockSnap.docs) {
+            const itemData = docSnap.data();
+            const itemName = (itemData.name || '').toLowerCase();
+            const stockRef = doc(db, "stock", docSnap.id);
+
+            const isBox = targetOrder.includeBox && itemName.includes('коробк');
+            const isDustbag = targetOrder.includeDustbag && itemName.includes('пильн');
+
+            if (isBox || isDustbag) {
+              const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+              const currentQty = Number(currentSuppliers[packagingSource]) || 0;
+
+              currentSuppliers[packagingSource] = currentQty + 1;
+              const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
+
+              await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+            }
           }
-          if (targetOrder.usedDustbag && itemData.name === targetOrder.usedDustbag) {
-            await updateDoc(doc(db, "stock", docSnap.id), { quantity: increment(1) });
-          }
-        });
+        }
 
         await fetchStockProducts();
       }

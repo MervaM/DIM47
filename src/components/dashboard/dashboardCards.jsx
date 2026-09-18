@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { Edit2, Trash2, Check, Copy } from 'lucide-react';
+import { Edit2, Trash2, Check, Copy, Package } from 'lucide-react';
 
 export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [editingTtnId, setEditingTtnId] = useState(null);
   const [ttnValues, setTtnValues] = useState({});
   const [copiedTtnId, setCopiedTtnId] = useState(null);
   const [copiedClientId, setCopiedClientId] = useState(null);
+
+  // Налаштування списання пакування під час введення ТТН
+  const [packagingSettings, setPackagingSettings] = useState({});
 
   const statusOptions = ['Нове', 'В роботі', 'З наявності', 'Доставка', 'Успішно', 'Відмова'];
 
@@ -28,12 +31,43 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     }
   };
 
+  const handleStartEditingTtn = (order) => {
+    setTtnValues(prev => ({ ...prev, [order.id]: order.ttn || '' }));
+    
+    // Ініціалізація налаштувань списання пакування для замовлення
+    setPackagingSettings(prev => ({
+      ...prev,
+      [order.id]: {
+        source: order.packagingSource || order.supplier || 'Міла',
+        includeBox: order.includeBox ?? true,
+        includeDustbag: order.includeDustbag ?? true
+      }
+    }));
+
+    setEditingTtnId(order.id);
+  };
+
+  const updatePackaging = (orderId, field, value) => {
+    setPackagingSettings(prev => ({
+      ...prev,
+      [orderId]: {
+        ...prev[orderId],
+        [field]: value
+      }
+    }));
+  };
+
   const handleTtnSave = (order) => {
     const newTtn = ttnValues[order.id] !== undefined ? ttnValues[order.id] : (order.ttn || '');
+    const packInfo = packagingSettings[order.id] || {};
+
     if (typeof onInlineSave === 'function') {
       onInlineSave({ 
         ...order, 
-        ttn: newTtn
+        ttn: newTtn,
+        packagingSource: packInfo.source,
+        includeBox: packInfo.includeBox,
+        includeDustbag: packInfo.includeDustbag
       });
     }
     setEditingTtnId(null);
@@ -48,7 +82,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     }, 1500);
   };
 
-  // Функція копіювання даних покупця одним повідомленням
   const handleCopyClientInfo = (order) => {
     const clientName = order.client || order.clientName || 'Клієнт';
     const clientPhone = order.phone || '—';
@@ -78,6 +111,11 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
       {orders.map((order) => {
         const remainingPayment = (Number(order.price) || 0) - (Number(order.advance) || 0);
         const isEditingTtn = editingTtnId === order.id;
+        const currentPack = packagingSettings[order.id] || {
+          source: order.packagingSource || order.supplier || 'Міла',
+          includeBox: order.includeBox ?? true,
+          includeDustbag: order.includeDustbag ?? true
+        };
 
         let colorsArr = [];
         if (Array.isArray(order.colorImages) && order.colorImages.length > 0) {
@@ -86,7 +124,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
           colorsArr = [order.colorImage];
         }
 
-        // Перевіряємо різні можливі назви полів для коментаря (comment, note тощо)
         const orderComment = order.comment || order.note || order.description;
 
         return (
@@ -170,7 +207,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   ].filter(Boolean).join(', ')}
                 </p>
 
-                {/* КОМЕНТАР ДО ЗАМОВЛЕННЯ (додано одразу під характеристиками) */}
                 {orderComment && (
                   <div className="mt-2 text-xs text-slate-600 bg-amber-50/60 border border-amber-200/60 rounded-xl px-3 py-2 italic">
                     <span className="font-semibold not-italic text-slate-700">Коментар:</span> {orderComment}
@@ -178,7 +214,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 )}
               </div>
 
-              {/* Дані клієнта з можливістю копіювання */}
+              {/* Дані клієнта */}
               <div className="bg-slate-50/60 rounded-2xl p-3.5 text-center relative border border-slate-100 space-y-1">
                 <button 
                   type="button" 
@@ -202,7 +238,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               </div>
 
-              {/* Блок ТТН з можливістю копіювання */}
+              {/* Блок ТТН та Списання Пакування */}
               <div className="border border-dashed border-slate-200 rounded-xl p-2.5 space-y-2 bg-white text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-500 uppercase tracking-wider">TTH:</span>
@@ -220,10 +256,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setTtnValues({ ...ttnValues, [order.id]: order.ttn || '' });
-                          setEditingTtnId(order.id);
-                        }}
+                        onClick={() => handleStartEditingTtn(order)}
                         className="text-[10px] text-slate-400 hover:text-slate-600 underline cursor-pointer"
                       >
                         змінити
@@ -232,10 +265,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   ) : !isEditingTtn ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        setTtnValues({ ...ttnValues, [order.id]: order.ttn || '' });
-                        setEditingTtnId(order.id);
-                      }}
+                      onClick={() => handleStartEditingTtn(order)}
                       className="font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
                     >
                       + Додати ТТН
@@ -243,14 +273,25 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   ) : null}
                 </div>
 
+                {/* Відображення деталей списання, якщо ТТН уже є */}
+                {order.ttn && !isEditingTtn && (
+                  <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-100 flex items-center justify-between">
+                    <span>Списано з: <strong className="text-slate-800">{order.packagingSource || 'Не вказано'}</strong></span>
+                    <span>
+                      {[order.includeBox && 'Коробка', order.includeDustbag && 'Пильовик'].filter(Boolean).join(' + ') || 'Без упаковки'}
+                    </span>
+                  </div>
+                )}
+
                 {copiedTtnId === order.id && (
                   <div className="text-[10px] font-bold text-emerald-600 text-center animate-pulse">
                     ТТН скопійовано в буфер обміну!
                   </div>
                 )}
 
+                {/* Редагування ТТН + Списання матеріалів */}
                 {isEditingTtn && (
-                  <div className="space-y-2.5 pt-1 border-t border-slate-100">
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
                     <input
                       type="text"
                       value={ttnValues[order.id] !== undefined ? ttnValues[order.id] : (order.ttn || '')}
@@ -259,6 +300,46 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                       className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none focus:border-slate-900"
                       autoFocus
                     />
+
+                    {/* Блок вибору складу та упаковки */}
+                    <div className="p-2.5 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-2">
+                      <div>
+                        <label className="text-[11px] font-bold text-amber-950 flex items-center gap-1 mb-1">
+                          <Package size={13} className="text-amber-700" /> Списати пакування з:
+                        </label>
+                        <select
+                          value={currentPack.source}
+                          onChange={(e) => updatePackaging(order.id, 'source', e.target.value)}
+                          className="w-full px-2 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-bold text-slate-800 cursor-pointer focus:outline-none"
+                        >
+                          <option value="Основний склад">Мій склад (у мене)</option>
+                          <option value="Міла">Склад виробника (Міла)</option>
+                          <option value="Валерій">Склад виробника (Валерій)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-4 pt-1">
+                        <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={currentPack.includeBox}
+                            onChange={(e) => updatePackaging(order.id, 'includeBox', e.target.checked)}
+                            className="rounded text-slate-900 focus:ring-slate-900 w-3.5 h-3.5 cursor-pointer"
+                          />
+                          Коробка
+                        </label>
+
+                        <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={currentPack.includeDustbag}
+                            onChange={(e) => updatePackaging(order.id, 'includeDustbag', e.target.checked)}
+                            className="rounded text-slate-900 focus:ring-slate-900 w-3.5 h-3.5 cursor-pointer"
+                          />
+                          Пильовик
+                        </label>
+                      </div>
+                    </div>
 
                     <div className="flex gap-2">
                       <button

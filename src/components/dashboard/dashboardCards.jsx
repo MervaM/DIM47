@@ -34,11 +34,13 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
   const handleStartEditingTtn = (order) => {
     setTtnValues(prev => ({ ...prev, [order.id]: order.ttn || '' }));
     
-    // Ініціалізація налаштувань списання пакування для замовлення
+    // Точна ініціалізація складу: якщо замовлення вже мало збережене джерело — беремо його, інакше чітко 'Основний склад'
+    const defaultSource = order.packagingSource || 'Основний склад';
+
     setPackagingSettings(prev => ({
       ...prev,
       [order.id]: {
-        source: order.packagingSource || order.supplier || 'Міла',
+        source: defaultSource,
         includeBox: order.includeBox ?? true,
         includeDustbag: order.includeDustbag ?? true
       }
@@ -65,9 +67,9 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
       onInlineSave({ 
         ...order, 
         ttn: newTtn,
-        packagingSource: packInfo.source,
-        includeBox: packInfo.includeBox,
-        includeDustbag: packInfo.includeDustbag
+        packagingSource: packInfo.source || 'Основний склад',
+        includeBox: packInfo.includeBox ?? true,
+        includeDustbag: packInfo.includeDustbag ?? true
       });
     }
     setEditingTtnId(null);
@@ -111,8 +113,9 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
       {orders.map((order) => {
         const remainingPayment = (Number(order.price) || 0) - (Number(order.advance) || 0);
         const isEditingTtn = editingTtnId === order.id;
+        
         const currentPack = packagingSettings[order.id] || {
-          source: order.packagingSource || order.supplier || 'Міла',
+          source: order.packagingSource || 'Основний склад',
           includeBox: order.includeBox ?? true,
           includeDustbag: order.includeDustbag ?? true
         };
@@ -276,7 +279,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 {/* Відображення деталей списання, якщо ТТН уже є */}
                 {order.ttn && !isEditingTtn && (
                   <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-100 flex items-center justify-between">
-                    <span>Списано з: <strong className="text-slate-800">{order.packagingSource || 'Не вказано'}</strong></span>
+                    <span>Списано з: <strong className="text-slate-800">{order.packagingSource || 'Основний склад'}</strong></span>
                     <span>
                       {[order.includeBox && 'Коробка', order.includeDustbag && 'Пильовик'].filter(Boolean).join(' + ') || 'Без упаковки'}
                     </span>

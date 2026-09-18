@@ -113,7 +113,7 @@ export default function Dashboard() {
           stockItemId: item.stockItemId || '',
           includeBox: item.includeBox ?? true,
           includeDustbag: item.includeDustbag ?? true,
-          packagingSource: item.packagingSource || '',
+          packagingSource: item.packagingSource || 'Основний склад',
           supplier: item.supplier || 'Міла',
           productDetails: item.productDetails || `${item.size || '—'} розм., ${item.colorText || item.color || ''}, ${item.material || ''}, ${item.filling || item.sole || ''}`
         });
@@ -138,12 +138,14 @@ export default function Dashboard() {
     setShowNewOrderModal(true);
   };
 
-  // Збереження картки та точне списання пакування
+  // Збереження картки та точний перерахунок коробок/пильовиків
   const handleInlineSaveOrder = async (updatedOrder) => {
     try {
       const orderRef = doc(db, "orders", updatedOrder.id);
       const previousOrder = orders.find(o => o.id === updatedOrder.id);
-      const isNewTtnAdded = updatedOrder.ttn && (!previousOrder?.ttn);
+
+      const hadTtnBefore = Boolean(previousOrder?.ttn);
+      const hasTtnNow = Boolean(updatedOrder.ttn);
 
       let targetSource = updatedOrder.packagingSource || 'Основний склад';
       if (targetSource === 'Мій склад (у мене)' || targetSource === 'Мій склад') {
@@ -166,18 +168,18 @@ export default function Dashboard() {
 
       await updateDoc(orderRef, updateData);
 
-      // Якщо ТТН вводиться вперше — віднімаємо пакування
-      if (isNewTtnAdded) {
+      // Логіка оновлення залишків при наявності ТТН
+      if (hasTtnNow) {
         const stockSnap = await getDocs(collection(db, "stock"));
 
         for (const docSnap of stockSnap.docs) {
           const itemData = docSnap.data();
           const stockRef = doc(db, "stock", docSnap.id);
 
-          const isBox = itemData.folderId === 'boxes' && updatedOrder.includeBox;
-          const isDustbag = itemData.folderId === 'dustbags' && updatedOrder.includeDustbag;
+          const isBox = itemData.folderId === 'boxes';
+          const isDustbag = itemData.folderId === 'dustbags';
 
-          if (isBox || isDustbag) {
+          if ((isBox && updatedOrder.includeBox) || (isDustbag && updatedOrder.includeDustbag)) {
             const currentSuppliers = {
               'Основний склад': 0,
               'Міла': 0,
@@ -185,20 +187,32 @@ export default function Dashboard() {
               ...(itemData.suppliers || {})
             };
 
-            const currentQty = Number(currentSuppliers[targetSource]) || 0;
+            // 1. Якщо ТТН додається вперше
+            if (!hadTtnBefore) {
+              const currentQty = Number(currentSuppliers[targetSource]) || 0;
+              if (currentQty > 0) {
+                currentSuppliers[targetSource] = currentQty - 1;
+              }
+            } 
+            // 2. Якщо ТТН була, але в картці змінили склад відправки
+            else if (previousOrder?.packagingSource && previousOrder.packagingSource !== targetSource) {
+              let oldSource = previousOrder.packagingSource;
+              if (oldSource === 'Мій склад (у мене)' || oldSource === 'Мій склад') {
+                oldSource = 'Основний склад';
+              }
 
-            if (currentQty > 0) {
-              currentSuppliers[targetSource] = currentQty - 1;
-              
-              const newTotalQty = (Number(currentSuppliers['Основний склад']) || 0) + 
-                                  (Number(currentSuppliers['Міла']) || 0) + 
-                                  (Number(currentSuppliers['Валерій']) || 0);
-
-              await updateDoc(stockRef, { 
-                suppliers: currentSuppliers, 
-                quantity: newTotalQty 
-              });
+              currentSuppliers[oldSource] = (Number(currentSuppliers[oldSource]) || 0) + 1;
+              currentSuppliers[targetSource] = Math.max(0, (Number(currentSuppliers[targetSource]) || 0) - 1);
             }
+
+            const newTotalQty = (Number(currentSuppliers['Основний склад']) || 0) + 
+                                (Number(currentSuppliers['Міла']) || 0) + 
+                                (Number(currentSuppliers['Валерій']) || 0);
+
+            await updateDoc(stockRef, { 
+              suppliers: currentSuppliers, 
+              quantity: newTotalQty 
+            });
           }
         }
       }
@@ -279,7 +293,7 @@ export default function Dashboard() {
     }
   };
 
-  // Зміна статусу на "Відмова"
+  // Перевід у статус "Відмова"
   const handleStatusChange = async (id, newStatus) => {
     try {
       const orderRef = doc(db, "orders", id);
@@ -288,7 +302,7 @@ export default function Dashboard() {
       await updateDoc(orderRef, { status: newStatus });
 
       if (newStatus === 'Відмова' && targetOrder) {
-        // 1. Повертаємо взуття у папку "Наявність"
+        // 1. Повертаємо взуття в "Наявність"
         await addDoc(collection(db, "stock"), {
           folderId: 'availability',
           name: targetOrder.name || targetOrder.productTitle || 'Товар з відмови',
@@ -303,7 +317,7 @@ export default function Dashboard() {
           createdAt: new Date().toISOString()
         });
 
-        // 2. Плюсуємо пакування НА МІЙ СКЛАД ("Основний склад")
+        // 2. Якщо була ТТН — коробка й пильовик плюсуються НА ОСНОВНИЙ СКЛАД
         if (targetOrder.ttn) {
           const stockSnap = await getDocs(collection(db, "stock"));
 

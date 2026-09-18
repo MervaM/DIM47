@@ -86,6 +86,9 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
           colorsArr = [order.colorImage];
         }
 
+        // Перевіряємо різні можливі назви полів для коментаря (comment, note тощо)
+        const orderComment = order.comment || order.note || order.description;
+
         return (
           <div 
             key={order.id}
@@ -166,6 +169,13 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                     order.lining
                   ].filter(Boolean).join(', ')}
                 </p>
+
+                {/* КОМЕНТАР ДО ЗАМОВЛЕННЯ (додано одразу під характеристиками) */}
+                {orderComment && (
+                  <div className="mt-2 text-xs text-slate-600 bg-amber-50/60 border border-amber-200/60 rounded-xl px-3 py-2 italic">
+                    <span className="font-semibold not-italic text-slate-700">Коментар:</span> {orderComment}
+                  </div>
+                )}
               </div>
 
               {/* Дані клієнта з можливістю копіювання */}

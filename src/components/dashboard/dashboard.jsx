@@ -138,14 +138,13 @@ export default function Dashboard() {
     setShowNewOrderModal(true);
   };
 
-  // Збереження картки при додаванні / зміні ТТН
+  // Збереження картки та точне списання пакування
   const handleInlineSaveOrder = async (updatedOrder) => {
     try {
       const orderRef = doc(db, "orders", updatedOrder.id);
       const previousOrder = orders.find(o => o.id === updatedOrder.id);
       const isNewTtnAdded = updatedOrder.ttn && (!previousOrder?.ttn);
 
-      // Мапінг назви складу
       let targetSource = updatedOrder.packagingSource || 'Основний склад';
       if (targetSource === 'Мій склад (у мене)' || targetSource === 'Мій склад') {
         targetSource = 'Основний склад';
@@ -167,7 +166,7 @@ export default function Dashboard() {
 
       await updateDoc(orderRef, updateData);
 
-      // Якщо ТТН додано вперше — списуємо пакування зі вказаного складу
+      // Якщо ТТН вводиться вперше — віднімаємо пакування
       if (isNewTtnAdded) {
         const stockSnap = await getDocs(collection(db, "stock"));
 
@@ -179,13 +178,26 @@ export default function Dashboard() {
           const isDustbag = itemData.folderId === 'dustbags' && updatedOrder.includeDustbag;
 
           if (isBox || isDustbag) {
-            const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+            const currentSuppliers = {
+              'Основний склад': 0,
+              'Міла': 0,
+              'Валерій': 0,
+              ...(itemData.suppliers || {})
+            };
+
             const currentQty = Number(currentSuppliers[targetSource]) || 0;
 
             if (currentQty > 0) {
               currentSuppliers[targetSource] = currentQty - 1;
-              const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
-              await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+              
+              const newTotalQty = (Number(currentSuppliers['Основний склад']) || 0) + 
+                                  (Number(currentSuppliers['Міла']) || 0) + 
+                                  (Number(currentSuppliers['Валерій']) || 0);
+
+              await updateDoc(stockRef, { 
+                suppliers: currentSuppliers, 
+                quantity: newTotalQty 
+              });
             }
           }
         }
@@ -267,7 +279,7 @@ export default function Dashboard() {
     }
   };
 
-  // Перевід замовлення у статус "Відмова"
+  // Зміна статусу на "Відмова"
   const handleStatusChange = async (id, newStatus) => {
     try {
       const orderRef = doc(db, "orders", id);
@@ -276,7 +288,7 @@ export default function Dashboard() {
       await updateDoc(orderRef, { status: newStatus });
 
       if (newStatus === 'Відмова' && targetOrder) {
-        // 1. Взуття повертається у вкладку "Наявність"
+        // 1. Повертаємо взуття у папку "Наявність"
         await addDoc(collection(db, "stock"), {
           folderId: 'availability',
           name: targetOrder.name || targetOrder.productTitle || 'Товар з відмови',
@@ -291,7 +303,7 @@ export default function Dashboard() {
           createdAt: new Date().toISOString()
         });
 
-        // 2. Пакування плюсується НА МІЙ СКЛАД ("Основний склад")
+        // 2. Плюсуємо пакування НА МІЙ СКЛАД ("Основний склад")
         if (targetOrder.ttn) {
           const stockSnap = await getDocs(collection(db, "stock"));
 
@@ -303,13 +315,24 @@ export default function Dashboard() {
             const isDustbag = itemData.folderId === 'dustbags' && targetOrder.includeDustbag;
 
             if (isBox || isDustbag) {
-              const currentSuppliers = itemData.suppliers || { 'Основний склад': itemData.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+              const currentSuppliers = {
+                'Основний склад': 0,
+                'Міла': 0,
+                'Валерій': 0,
+                ...(itemData.suppliers || {})
+              };
+
               const currentMyQty = Number(currentSuppliers['Основний склад']) || 0;
-
               currentSuppliers['Основний склад'] = currentMyQty + 1;
-              const newTotalQty = Object.values(currentSuppliers).reduce((sum, val) => sum + Number(val || 0), 0);
 
-              await updateDoc(stockRef, { suppliers: currentSuppliers, quantity: newTotalQty });
+              const newTotalQty = (Number(currentSuppliers['Основний склад']) || 0) + 
+                                  (Number(currentSuppliers['Міла']) || 0) + 
+                                  (Number(currentSuppliers['Валерій']) || 0);
+
+              await updateDoc(stockRef, { 
+                suppliers: currentSuppliers, 
+                quantity: newTotalQty 
+              });
             }
           }
         }

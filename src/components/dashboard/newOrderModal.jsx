@@ -55,7 +55,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
   useEffect(() => {
     if (isOpen) {
       if (editingOrder) {
-        // Режим редагування: заповнюємо існуючими даними
         setName(editingOrder.name || editingOrder.productTitle || '');
         setImage(editingOrder.image || '');
         setColorImages(editingOrder.colorImages || (editingOrder.colorImage ? [editingOrder.colorImage] : []));
@@ -74,7 +73,6 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
         setAdvance(editingOrder.advance !== undefined ? String(editingOrder.advance) : '300');
         setComment(editingOrder.comment || editingOrder.note || '');
       } else {
-        // Режим створення нового
         setName('');
         setImage('');
         setColorImages([]);
@@ -157,6 +155,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
     item && item.name && String(item.name).toLowerCase().includes(String(name).toLowerCase())
   );
 
+  // Оновлений та покращений розумний парсер
   const handleSmartClientParse = (eOrText) => {
     const rawText = typeof eOrText === 'string' ? eOrText : (eOrText?.target?.value ?? '');
     setSmartText(rawText);
@@ -164,37 +163,52 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
 
     let cleanText = rawText;
 
-    const phoneMatch = cleanText.match(/(\+?38)?0\d{9}/);
+    // 1. Пошук телефону (усі типи запису)
+    const phoneMatch = cleanText.match(/(?:\+?38)?\s*\(?0\d{2}\)?[\s-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}/) || cleanText.match(/0\d{9}/);
     if (phoneMatch) {
-      setPhone(phoneMatch[0]);
+      const parsedPhone = phoneMatch[0].replace(/\D/g, '');
+      setPhone(parsedPhone.length === 10 ? parsedPhone : parsedPhone.slice(-10));
       cleanText = cleanText.replace(phoneMatch[0], ' ');
     }
 
-    const addressMatch = cleanText.match(/(?:відділення|нп|пошта|№)\s*[\w№\-]*\s*\d+/i) || cleanText.match(/№\s*\d+/i) || cleanText.match(/(?:відділення|нп)\s*№?\s*\d+/i);
+    // 2. Пошук відділення (Нова Пошта / Укрпошта)
+    const addressMatch = 
+      cleanText.match(/(?:відділення|відд|пошта|нп|№)\s*[:#-]?\s*\d+/i) || 
+      cleanText.match(/№\s*\d+/i) || 
+      cleanText.match(/\b\d+\b\s*(?:відділення|відд)/i);
+
     if (addressMatch) {
       setAddress(addressMatch[0].trim());
       cleanText = cleanText.replace(addressMatch[0], ' ');
     }
 
-    const ukraineCities = /Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-|Чернівц|Ужгород|Хмельницьк|Вінниц|Черкас|Полтав|Суми|Запоріжжя|Миколаїв|Кропивницьк|Луцьк|Чернігів|Нововолинськ|Ковель|Володимир/i;
-    const cityMatch = cleanText.match(/(?:м\.|місто)\s*([А-ЯІЄЇҐ][а-яієїґ]+(?:[- ][А-ЯІЄЇҐ][а-яієїґ]+)?)/i) || cleanText.match(ukraineCities);
+    // 3. Пошук міста
+    const ukraineCities = /Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-Франківськ|Чернівці|Ужгород|Хмельницький|Вінниця|Черкаси|Полтава|Суми|Запоріжжя|Миколаїв|Кропивницький|Луцьк|Чернігів|Ромни|Нововолинськ|Ковель|Володимир|Шостка|Конотоп/i;
+    
+    const cityMatch = 
+      cleanText.match(/(?:смт|м\.|місто|г\.)\s*([А-ЯІЄЇҐ][а-яієїґ]+(?:[- ][А-ЯІЄЇҐ][а-яієїґ]+)?)/i) || 
+      cleanText.match(ukraineCities);
+
     if (cityMatch) {
       const foundCity = cityMatch[1] || cityMatch[0];
-      setCity(foundCity.replace(/місто|м\./gi, '').trim());
+      setCity(foundCity.replace(/(?:смт|місто|м\.|г\.)/gi, '').trim());
       cleanText = cleanText.replace(cityMatch[0], ' ');
     }
 
+    // 4. Очищення від назв областей та сміттєвих слів
     cleanText = cleanText
-      .replace(/область|обл\.|район|району|або|доставка|отримувач|Волинська|Львівська|Київська/gi, ' ')
+      .replace(/(?:Сумська|Київська|Львівська|Харківська|Одеська|Дніпропетровська|Житомирська|Рівненська|Тернопільська|Івано-Франківська|Чернівецька|Закарпатська|Хмельницька|Вінницька|Черкаська|Полтавська|Запорізька|Миколаївська|Кіровоградська|Волинська|Чернігівська)\s*(?:обл\.|область)?/gi, ' ')
+      .replace(/(?:район|р-н|обл\.|область|доставка|отримувач|нп|нова пошта|укрпошта|відділення|відд|номер)/gi, ' ')
+      .replace(/[^a-zA-Zа-яА-ЯіІєЄїЇґҐ\s]/g, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
 
-    const words = cleanText.split(/,|\n/).map(p => p.trim()).filter(Boolean);
-    if (words.length > 0) {
-      const possibleName = words.find(w => w.split(/\s+/).length >= 2) || words[0];
-      if (possibleName) {
-        setClientName(possibleName.trim());
-      }
+    // 5. Формування ПІБ з залишків
+    const words = cleanText.split(/\s+/).filter(w => w.length > 1);
+    if (words.length >= 2) {
+      setClientName(words.slice(0, 3).join(' '));
+    } else if (words.length === 1) {
+      setClientName(words[0]);
     }
   };
 

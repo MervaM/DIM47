@@ -93,6 +93,7 @@ export default function Dashboard() {
           warehouse: item.warehouse || '',
           address: item.warehouse || '',
           ttn: item.ttn || '',
+          instagram: item.instagram || '',
           advance: item.advance !== undefined ? item.advance : 0,
           discount: item.discount || '',
           paymentType: item.paymentType || item.payment || '',
@@ -138,7 +139,7 @@ export default function Dashboard() {
     setShowNewOrderModal(true);
   };
 
-  // Збереження картки та точний перерахунок коробок/пильовиків
+  // Збереження картки (ТТН, Instagram, склади)
   const handleInlineSaveOrder = async (updatedOrder) => {
     try {
       const orderRef = doc(db, "orders", updatedOrder.id);
@@ -158,6 +159,7 @@ export default function Dashboard() {
         city: updatedOrder.city || '',
         warehouse: updatedOrder.warehouse || '',
         ttn: updatedOrder.ttn || '',
+        instagram: updatedOrder.instagram || '',
         price: Number(updatedOrder.price) || 0,
         advance: Number(updatedOrder.advance) || 0,
         supplier: updatedOrder.supplier || 'Міла',
@@ -168,7 +170,6 @@ export default function Dashboard() {
 
       await updateDoc(orderRef, updateData);
 
-      // Логіка оновлення залишків при наявності ТТН
       if (hasTtnNow) {
         const stockSnap = await getDocs(collection(db, "stock"));
 
@@ -187,14 +188,12 @@ export default function Dashboard() {
               ...(itemData.suppliers || {})
             };
 
-            // 1. Якщо ТТН додається вперше
             if (!hadTtnBefore) {
               const currentQty = Number(currentSuppliers[targetSource]) || 0;
               if (currentQty > 0) {
                 currentSuppliers[targetSource] = currentQty - 1;
               }
             } 
-            // 2. Якщо ТТН була, але в картці змінили склад відправки
             else if (previousOrder?.packagingSource && previousOrder.packagingSource !== targetSource) {
               let oldSource = previousOrder.packagingSource;
               if (oldSource === 'Мій склад (у мене)' || oldSource === 'Мій склад') {
@@ -233,6 +232,7 @@ export default function Dashboard() {
         city: orderData.city || '—',
         warehouse: orderData.address || '—',
         ttn: orderData.ttn || '',
+        instagram: orderData.instagram || '',
         advance: Number(orderData.advance) || 0,
         discount: Number(orderData.discount) || 0,
         paymentType: orderData.paymentType || 'Передплата',
@@ -293,7 +293,6 @@ export default function Dashboard() {
     }
   };
 
-  // Перевід у статус "Відмова"
   const handleStatusChange = async (id, newStatus) => {
     try {
       const orderRef = doc(db, "orders", id);
@@ -302,7 +301,6 @@ export default function Dashboard() {
       await updateDoc(orderRef, { status: newStatus });
 
       if (newStatus === 'Відмова' && targetOrder) {
-        // 1. Повертаємо взуття в "Наявність"
         await addDoc(collection(db, "stock"), {
           folderId: 'availability',
           name: targetOrder.name || targetOrder.productTitle || 'Товар з відмови',
@@ -317,7 +315,6 @@ export default function Dashboard() {
           createdAt: new Date().toISOString()
         });
 
-        // 2. Якщо була ТТН — коробка й пильовик плюсуються НА ОСНОВНИЙ СКЛАД
         if (targetOrder.ttn) {
           const stockSnap = await getDocs(collection(db, "stock"));
 

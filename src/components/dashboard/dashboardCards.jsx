@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { Edit2, Trash2, Check, Copy, Package } from 'lucide-react';
+import { Edit2, Trash2, Check, Copy, Package, Instagram } from 'lucide-react';
 
 export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [editingTtnId, setEditingTtnId] = useState(null);
   const [ttnValues, setTtnValues] = useState({});
   const [copiedTtnId, setCopiedTtnId] = useState(null);
   const [copiedClientId, setCopiedClientId] = useState(null);
+
+  // Стан для редагування Instagram
+  const [editingInstagramId, setEditingInstagramId] = useState(null);
+  const [instagramValues, setInstagramValues] = useState({});
 
   // Налаштування списання пакування під час введення ТТН
   const [packagingSettings, setPackagingSettings] = useState({});
@@ -34,7 +38,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
   const handleStartEditingTtn = (order) => {
     setTtnValues(prev => ({ ...prev, [order.id]: order.ttn || '' }));
     
-    // Точна ініціалізація складу: якщо замовлення вже мало збережене джерело — беремо його, інакше чітко 'Основний склад'
     const defaultSource = order.packagingSource || 'Основний склад';
 
     setPackagingSettings(prev => ({
@@ -75,6 +78,28 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     setEditingTtnId(null);
   };
 
+  // Збереження Instagram
+  const handleStartEditingInstagram = (order) => {
+    setInstagramValues(prev => ({ ...prev, [order.id]: order.instagram || '' }));
+    setEditingInstagramId(order.id);
+  };
+
+  const handleInstagramSave = (order) => {
+    const rawVal = instagramValues[order.id] !== undefined ? instagramValues[order.id] : (order.instagram || '');
+    let cleanVal = rawVal.trim();
+    if (cleanVal && !cleanVal.startsWith('@') && !cleanVal.includes('instagram.com')) {
+      cleanVal = `@${cleanVal}`;
+    }
+
+    if (typeof onInlineSave === 'function') {
+      onInlineSave({ 
+        ...order, 
+        instagram: cleanVal 
+      });
+    }
+    setEditingInstagramId(null);
+  };
+
   const handleCopyTtn = (orderId, ttnText) => {
     if (!ttnText) return;
     navigator.clipboard.writeText(ttnText);
@@ -113,7 +138,8 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
       {orders.map((order) => {
         const remainingPayment = (Number(order.price) || 0) - (Number(order.advance) || 0);
         const isEditingTtn = editingTtnId === order.id;
-        
+        const isEditingInstagram = editingInstagramId === order.id;
+
         const currentPack = packagingSettings[order.id] || {
           source: order.packagingSource || 'Основний склад',
           includeBox: order.includeBox ?? true,
@@ -276,7 +302,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   ) : null}
                 </div>
 
-                {/* Відображення деталей списання, якщо ТТН уже є */}
                 {order.ttn && !isEditingTtn && (
                   <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-100 flex items-center justify-between">
                     <span>Списано з: <strong className="text-slate-800">{order.packagingSource || 'Основний склад'}</strong></span>
@@ -292,7 +317,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   </div>
                 )}
 
-                {/* Редагування ТТН + Списання матеріалів */}
                 {isEditingTtn && (
                   <div className="space-y-3 pt-2 border-t border-slate-100">
                     <input
@@ -304,7 +328,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                       autoFocus
                     />
 
-                    {/* Блок вибору складу та упаковки */}
                     <div className="p-2.5 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-2">
                       <div>
                         <label className="text-[11px] font-bold text-amber-950 flex items-center gap-1 mb-1">
@@ -379,6 +402,69 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 <span className="font-semibold text-slate-900">Ціна товару:</span>
                 <span className="font-bold text-slate-900 text-sm">{order.price || 0} грн</span>
               </div>
+            </div>
+
+            {/* Нижній блок: Instagram покупця */}
+            <div className="pt-2 border-t border-slate-100">
+              {isEditingInstagram ? (
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-pink-500">
+                      <Instagram size={14} />
+                    </span>
+                    <input
+                      type="text"
+                      value={instagramValues[order.id] !== undefined ? instagramValues[order.id] : (order.instagram || '')}
+                      onChange={(e) => setInstagramValues({ ...instagramValues, [order.id]: e.target.value })}
+                      placeholder="@nickname"
+                      className="w-full pl-8 pr-2 py-1.5 border border-pink-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-pink-500"
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleInstagramSave(order)}
+                    className="px-2.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    OK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingInstagramId(null)}
+                    className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  {order.instagram ? (
+                    <div className="flex items-center gap-1.5">
+                      <Instagram size={14} className="text-pink-600" />
+                      <a
+                        href={`https://instagram.com/${order.instagram.replace('@', '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-bold text-pink-600 hover:underline"
+                      >
+                        {order.instagram}
+                      </a>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                      <Instagram size={14} className="text-slate-300" /> Instagram не вказано
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditingInstagram(order)}
+                    className="text-[11px] font-bold text-pink-600 hover:bg-pink-50 px-2 py-1 rounded-lg transition cursor-pointer"
+                  >
+                    {order.instagram ? 'Змінити' : '+ Instagram'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         );

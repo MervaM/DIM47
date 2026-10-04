@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Edit2, Trash2, Check, Copy, Package, Instagram } from 'lucide-react';
+import { Edit2, Trash2, Check, Copy, Package, Instagram, ExternalLink } from 'lucide-react';
 
 export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [editingTtnId, setEditingTtnId] = useState(null);
   const [ttnValues, setTtnValues] = useState({});
   const [copiedTtnId, setCopiedTtnId] = useState(null);
-  const [copiedClientId, setCopiedClientId] = useState(null);
+  
+  // Стан для відображення підказки "Скопійовано" для конкретного поля клієнта
+  const [copiedField, setCopiedField] = useState({ orderId: null, field: null });
 
   // Стан для редагування Instagram
   const [editingInstagramId, setEditingInstagramId] = useState(null);
@@ -109,19 +111,30 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     }, 1500);
   };
 
+  // Функція для копіювання окремих рядків клієнта
+  const handleCopySingleField = (orderId, text, fieldName) => {
+    if (!text || text === '—') return;
+    navigator.clipboard.writeText(text);
+    setCopiedField({ orderId, field: fieldName });
+    setTimeout(() => {
+      setCopiedField({ orderId: null, field: null });
+    }, 1500);
+  };
+
+  // Скопіювати всі дані клієнта разом
   const handleCopyClientInfo = (order) => {
-    const clientName = order.client || order.clientName || 'Клієнт';
-    const clientPhone = order.phone || '—';
+    const clientName = order.client || order.clientName || '';
+    const clientPhone = order.phone || '';
     const city = order.city || '';
     const address = order.warehouse || order.address || '';
     const fullAddress = [city, address].filter(Boolean).join(', ');
 
-    const textToCopy = `${clientName}\n${clientPhone}\n${fullAddress}`;
+    const textToCopy = [clientName, clientPhone, fullAddress].filter(Boolean).join('\n');
 
     navigator.clipboard.writeText(textToCopy);
-    setCopiedClientId(order.id);
+    setCopiedField({ orderId: order.id, field: 'all' });
     setTimeout(() => {
-      setCopiedClientId(null);
+      setCopiedField({ orderId: null, field: null });
     }, 1500);
   };
 
@@ -155,10 +168,19 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
 
         const orderComment = order.comment || order.note || order.description;
 
+        const clientName = order.client || order.clientName || 'Клієнт';
+        const clientPhone = order.phone || '—';
+        const fullAddress = [order.city, order.warehouse || order.address].filter(Boolean).join(', ') || '—';
+
+        // Форматування Instagram посилання
+        const instaRaw = order.instagram || '';
+        const instaHandle = instaRaw.replace('@', '').replace(/https?:\/\/(www\.)?instagram\.com\//, '').replace(/\//g, '').trim();
+        const instaUrl = `https://instagram.com/${instaHandle}`;
+
         return (
           <div 
             key={order.id}
-            className="production-card bg-white rounded-3xl border border-slate-200/80 shadow-xs p-4 space-y-3.5 relative"
+            className="production-card bg-white rounded-3xl border border-slate-200/80 shadow-xs p-4 space-y-3.5 relative flex flex-col justify-between"
             style={{ minHeight: '85vh' }}
           >
             <div className="space-y-3.5">
@@ -243,27 +265,51 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 )}
               </div>
 
-              {/* Дані клієнта */}
-              <div className="bg-slate-50/60 rounded-2xl p-3.5 text-center relative border border-slate-100 space-y-1">
+              {/* ОНОВЛЕНИЙ БЛОК: Дані клієнта з копіюванням кожного рядка */}
+              <div className="bg-slate-50/70 rounded-2xl p-3 text-center relative border border-slate-100 space-y-1">
                 <button 
                   type="button" 
                   onClick={() => handleCopyClientInfo(order)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 p-1 border rounded-lg bg-white cursor-pointer transition active:scale-95"
-                  title="Скопіювати дані покупця"
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-1 border rounded-lg bg-white cursor-pointer transition active:scale-95 shadow-2xs"
+                  title="Скопіювати всі дані покупця"
                 >
                   <Copy size={13} />
                 </button>
 
-                {copiedClientId === order.id && (
-                  <div className="absolute top-1 left-0 right-0 text-[10px] font-bold text-emerald-600 bg-emerald-50 py-0.5 rounded-t-2xl animate-pulse">
-                    Дані покупця скопійовано!
+                {copiedField.orderId === order.id && (
+                  <div className="absolute top-1 left-2 right-2 text-[10px] font-bold text-emerald-600 bg-emerald-100/90 py-0.5 rounded-lg animate-pulse z-10 shadow-2xs">
+                    {copiedField.field === 'all' ? 'Усі дані скопійовано!' : 'Скопійовано!'}
                   </div>
                 )}
 
-                <div className="font-bold text-slate-900 text-base">{order.client || order.clientName || 'Клієнт'}</div>
-                <div className="text-xs font-semibold text-slate-600">{order.phone || '—'}</div>
-                <div className="text-xs text-slate-500">
-                  {order.city || ''}{order.city && order.warehouse ? ', ' : ''}{order.warehouse || order.address || ''}
+                {/* Рядок 1: ПІБ */}
+                <div 
+                  onClick={() => handleCopySingleField(order.id, clientName, 'name')}
+                  className="font-bold text-slate-900 text-base cursor-pointer hover:bg-slate-200/60 active:bg-slate-300/60 py-1 px-2 rounded-lg transition select-none flex items-center justify-center gap-1.5 group"
+                  title="Натисніть, щоб скопіювати ПІБ"
+                >
+                  <span>{clientName}</span>
+                  <Copy size={12} className="opacity-0 group-hover:opacity-40 transition-opacity text-slate-500" />
+                </div>
+
+                {/* Рядок 2: Телефон */}
+                <div 
+                  onClick={() => handleCopySingleField(order.id, clientPhone, 'phone')}
+                  className="text-xs font-semibold text-slate-600 cursor-pointer hover:bg-slate-200/60 active:bg-slate-300/60 py-1 px-2 rounded-lg transition select-none flex items-center justify-center gap-1.5 group"
+                  title="Натисніть, щоб скопіювати телефон"
+                >
+                  <span>{clientPhone}</span>
+                  <Copy size={11} className="opacity-0 group-hover:opacity-40 transition-opacity text-slate-500" />
+                </div>
+
+                {/* Рядок 3: Адреса / Відділення */}
+                <div 
+                  onClick={() => handleCopySingleField(order.id, fullAddress, 'address')}
+                  className="text-xs text-slate-500 cursor-pointer hover:bg-slate-200/60 active:bg-slate-300/60 py-1 px-2 rounded-lg transition select-none flex items-center justify-center gap-1.5 group"
+                  title="Натисніть, щоб скопіювати адресу"
+                >
+                  <span>{fullAddress}</span>
+                  <Copy size={11} className="opacity-0 group-hover:opacity-40 transition-opacity text-slate-500" />
                 </div>
               </div>
 
@@ -388,83 +434,88 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
               </div>
             </div>
 
-            {/* Блок цін */}
-            <div className="bg-slate-50/70 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-100">
-              <div className="flex justify-between items-center font-bold pb-1.5 border-b border-slate-200/60">
-                <span className="text-emerald-600">Залишок до сплати:</span>
-                <span className="text-emerald-600 text-sm">{remainingPayment > 0 ? remainingPayment : 0} грн</span>
-              </div>
-              <div className="flex justify-between items-center text-slate-500 pt-0.5">
-                <span>Передплата:</span>
-                <span className="font-medium text-slate-700">{order.advance || 0} грн</span>
-              </div>
-              <div className="flex justify-between items-center pt-1.5">
-                <span className="font-semibold text-slate-900">Ціна товару:</span>
-                <span className="font-bold text-slate-900 text-sm">{order.price || 0} грн</span>
-              </div>
-            </div>
-
-            {/* Нижній блок: Instagram покупця */}
-            <div className="pt-2 border-t border-slate-100">
-              {isEditingInstagram ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="relative flex-1">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-pink-500">
-                      <Instagram size={14} />
-                    </span>
-                    <input
-                      type="text"
-                      value={instagramValues[order.id] !== undefined ? instagramValues[order.id] : (order.instagram || '')}
-                      onChange={(e) => setInstagramValues({ ...instagramValues, [order.id]: e.target.value })}
-                      placeholder="@nickname"
-                      className="w-full pl-8 pr-2 py-1.5 border border-pink-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-pink-500"
-                      autoFocus
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleInstagramSave(order)}
-                    className="px-2.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    OK
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingInstagramId(null)}
-                    className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs cursor-pointer"
-                  >
-                    ✕
-                  </button>
+            {/* Нижня частина картки */}
+            <div className="space-y-3 pt-2">
+              {/* Блок цін */}
+              <div className="bg-slate-50/70 rounded-2xl p-3.5 space-y-2 text-xs border border-slate-100">
+                <div className="flex justify-between items-center font-bold pb-1.5 border-b border-slate-200/60">
+                  <span className="text-emerald-600">Залишок до сплати:</span>
+                  <span className="text-emerald-600 text-sm">{remainingPayment > 0 ? remainingPayment : 0} грн</span>
                 </div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  {order.instagram ? (
-                    <div className="flex items-center gap-1.5">
-                      <Instagram size={14} className="text-pink-600" />
-                      <a
-                        href={`https://instagram.com/${order.instagram.replace('@', '')}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-bold text-pink-600 hover:underline"
-                      >
-                        {order.instagram}
-                      </a>
+                <div className="flex justify-between items-center text-slate-500 pt-0.5">
+                  <span>Передплата:</span>
+                  <span className="font-medium text-slate-700">{order.advance || 0} грн</span>
+                </div>
+                <div className="flex justify-between items-center pt-1.5">
+                  <span className="font-semibold text-slate-900">Ціна товару:</span>
+                  <span className="font-bold text-slate-900 text-sm">{order.price || 0} грн</span>
+                </div>
+              </div>
+
+              {/* ОНОВЛЕНИЙ БЛОК: Instagram покупця */}
+              <div className="pt-2 border-t border-slate-100">
+                {isEditingInstagram ? (
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative flex-1">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-pink-500">
+                        <Instagram size={14} />
+                      </span>
+                      <input
+                        type="text"
+                        value={instagramValues[order.id] !== undefined ? instagramValues[order.id] : (order.instagram || '')}
+                        onChange={(e) => setInstagramValues({ ...instagramValues, [order.id]: e.target.value })}
+                        placeholder="@nickname"
+                        className="w-full pl-8 pr-2 py-1.5 border border-pink-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-pink-500"
+                        autoFocus
+                      />
                     </div>
-                  ) : (
-                    <span className="text-xs text-slate-400 flex items-center gap-1">
-                      <Instagram size={14} className="text-slate-300" /> Instagram не вказано
-                    </span>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => handleInstagramSave(order)}
+                      className="px-2.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      OK
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingInstagramId(null)}
+                      className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    {instaHandle ? (
+                      <div className="flex items-center gap-1.5">
+                        <Instagram size={14} className="text-pink-600 shrink-0" />
+                        <a
+                          href={instaUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-bold text-pink-600 hover:underline flex items-center gap-1"
+                          title="Перейти в Instagram профайл"
+                        >
+                          @{instaHandle}
+                          <ExternalLink size={11} className="text-pink-400" />
+                        </a>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <Instagram size={14} className="text-slate-300" /> Instagram не вказано
+                      </span>
+                    )}
 
-                  <button
-                    type="button"
-                    onClick={() => handleStartEditingInstagram(order)}
-                    className="text-[11px] font-bold text-pink-600 hover:bg-pink-50 px-2 py-1 rounded-lg transition cursor-pointer"
-                  >
-                    {order.instagram ? 'Змінити' : '+ Instagram'}
-                  </button>
-                </div>
-              )}
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditingInstagram(order)}
+                      className="text-[11px] font-bold text-pink-600 hover:bg-pink-50 px-2 py-1 rounded-lg transition cursor-pointer"
+                    >
+                      {instaHandle ? 'Змінити' : '+ Instagram'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );

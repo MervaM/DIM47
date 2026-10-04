@@ -111,11 +111,17 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     }, 1500);
   };
 
-  // Функція для копіювання окремих рядків клієнта
-  const handleCopySingleField = (orderId, text, fieldName) => {
+  // Копіювання окремих полів з підтримкою кліку та довгого затискання (Long Press)
+  const handleCopySingleField = (e, orderId, text, fieldName) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (!text || text === '—') return;
+
     navigator.clipboard.writeText(text);
     setCopiedField({ orderId, field: fieldName });
+    
     setTimeout(() => {
       setCopiedField({ orderId: null, field: null });
     }, 1500);
@@ -265,52 +271,64 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 )}
               </div>
 
-              {/* ОНОВЛЕНИЙ БЛОК: Дані клієнта з копіюванням кожного рядка */}
-              <div className="bg-slate-50/70 rounded-2xl p-3 text-center relative border border-slate-100 space-y-1">
+              {/* БЛОК ДАНИХ КЛІЄНТА: Кожен рядок копіюється окремо (клік / затискання) */}
+              <div className="bg-slate-50/80 rounded-2xl p-3 text-center relative border border-slate-200/60 space-y-1.5 select-none">
+                
+                {/* Кнопка "Скопіювати все разом" */}
                 <button 
                   type="button" 
                   onClick={() => handleCopyClientInfo(order)}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-1 border rounded-lg bg-white cursor-pointer transition active:scale-95 shadow-2xs"
-                  title="Скопіювати всі дані покупця"
+                  className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-1.5 border rounded-lg bg-white cursor-pointer transition active:scale-95 shadow-2xs z-10"
+                  title="Скопіювати всі дані покупця разом"
                 >
                   <Copy size={13} />
                 </button>
 
+                {/* Повідомлення про успішне копіювання */}
                 {copiedField.orderId === order.id && (
-                  <div className="absolute top-1 left-2 right-2 text-[10px] font-bold text-emerald-600 bg-emerald-100/90 py-0.5 rounded-lg animate-pulse z-10 shadow-2xs">
-                    {copiedField.field === 'all' ? 'Усі дані скопійовано!' : 'Скопійовано!'}
+                  <div className="absolute -top-2 left-4 right-4 text-[11px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 py-1 rounded-lg animate-bounce z-20 shadow-md">
+                    {copiedField.field === 'name' && 'ПІБ скопійовано!'}
+                    {copiedField.field === 'phone' && 'Номер скопійовано!'}
+                    {copiedField.field === 'address' && 'Місто та Пошту скопійовано!'}
+                    {copiedField.field === 'all' && 'Усі дані скопійовано!'}
                   </div>
                 )}
 
-                {/* Рядок 1: ПІБ */}
-                <div 
-                  onClick={() => handleCopySingleField(order.id, clientName, 'name')}
-                  className="font-bold text-slate-900 text-base cursor-pointer hover:bg-slate-200/60 active:bg-slate-300/60 py-1 px-2 rounded-lg transition select-none flex items-center justify-center gap-1.5 group"
-                  title="Натисніть, щоб скопіювати ПІБ"
+                {/* 1. ОКРЕМО ПІБ */}
+                <button
+                  type="button"
+                  onClick={(e) => handleCopySingleField(e, order.id, clientName, 'name')}
+                  onContextMenu={(e) => handleCopySingleField(e, order.id, clientName, 'name')}
+                  className="w-full text-center font-bold text-slate-900 text-base hover:bg-slate-200/80 active:bg-emerald-100 active:text-emerald-900 py-1.5 px-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-transparent hover:border-slate-300/60"
+                  title="Натисніть або затисніть, щоб скопіювати ПІБ"
                 >
                   <span>{clientName}</span>
-                  <Copy size={12} className="opacity-0 group-hover:opacity-40 transition-opacity text-slate-500" />
-                </div>
+                  <Copy size={12} className="text-slate-400 shrink-0 opacity-60" />
+                </button>
 
-                {/* Рядок 2: Телефон */}
-                <div 
-                  onClick={() => handleCopySingleField(order.id, clientPhone, 'phone')}
-                  className="text-xs font-semibold text-slate-600 cursor-pointer hover:bg-slate-200/60 active:bg-slate-300/60 py-1 px-2 rounded-lg transition select-none flex items-center justify-center gap-1.5 group"
-                  title="Натисніть, щоб скопіювати телефон"
+                {/* 2. ОКРЕМО НОМЕР ТЕЛЕФОНУ */}
+                <button
+                  type="button"
+                  onClick={(e) => handleCopySingleField(e, order.id, clientPhone, 'phone')}
+                  onContextMenu={(e) => handleCopySingleField(e, order.id, clientPhone, 'phone')}
+                  className="w-full text-center text-xs font-extrabold text-slate-700 hover:bg-slate-200/80 active:bg-emerald-100 active:text-emerald-900 py-1.5 px-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-transparent hover:border-slate-300/60"
+                  title="Натисніть або затисніть, щоб скопіювати Номер"
                 >
                   <span>{clientPhone}</span>
-                  <Copy size={11} className="opacity-0 group-hover:opacity-40 transition-opacity text-slate-500" />
-                </div>
+                  <Copy size={11} className="text-slate-400 shrink-0 opacity-60" />
+                </button>
 
-                {/* Рядок 3: Адреса / Відділення */}
-                <div 
-                  onClick={() => handleCopySingleField(order.id, fullAddress, 'address')}
-                  className="text-xs text-slate-500 cursor-pointer hover:bg-slate-200/60 active:bg-slate-300/60 py-1 px-2 rounded-lg transition select-none flex items-center justify-center gap-1.5 group"
-                  title="Натисніть, щоб скопіювати адресу"
+                {/* 3. ОКРЕМО НАСЕЛЕНИЙ ПУНКТ ТА ПОШТА */}
+                <button
+                  type="button"
+                  onClick={(e) => handleCopySingleField(e, order.id, fullAddress, 'address')}
+                  onContextMenu={(e) => handleCopySingleField(e, order.id, fullAddress, 'address')}
+                  className="w-full text-center text-xs font-medium text-slate-600 hover:bg-slate-200/80 active:bg-emerald-100 active:text-emerald-900 py-1.5 px-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-transparent hover:border-slate-300/60"
+                  title="Натисніть або затисніть, щоб скопіювати Населений пункт та Пошту"
                 >
-                  <span>{fullAddress}</span>
-                  <Copy size={11} className="opacity-0 group-hover:opacity-40 transition-opacity text-slate-500" />
-                </div>
+                  <span className="truncate">{fullAddress}</span>
+                  <Copy size={11} className="text-slate-400 shrink-0 opacity-60" />
+                </button>
               </div>
 
               {/* Блок ТТН та Списання Пакування */}
@@ -452,7 +470,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               </div>
 
-              {/* ОНОВЛЕНИЙ БЛОК: Instagram покупця */}
+              {/* Блок Instagram покупця */}
               <div className="pt-2 border-t border-slate-100">
                 {isEditingInstagram ? (
                   <div className="flex items-center gap-1.5">

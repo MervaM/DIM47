@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
+import { X, Upload, Search, Image as ImageIcon, Wand2, Instagram } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -29,6 +29,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
+  const [instagram, setInstagram] = useState('');
   const [smartText, setSmartText] = useState('');
   
   const [paymentType, setPaymentType] = useState('Передплата');
@@ -64,6 +65,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
         setPhone(editingOrder.phone || '');
         setCity(editingOrder.city || '');
         setAddress(editingOrder.address || editingOrder.warehouse || '');
+        setInstagram(editingOrder.instagram || '');
         setPrice(editingOrder.price !== undefined ? String(editingOrder.price) : '');
         setAdvance(editingOrder.advance !== undefined ? String(editingOrder.advance) : '300');
         setComment(editingOrder.comment || editingOrder.note || '');
@@ -81,6 +83,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
         setPhone('');
         setCity('');
         setAddress('');
+        setInstagram('');
         setSmartText('');
         setAdvance('300');
         setDiscount('0');
@@ -148,6 +151,14 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
     if (!rawText.trim()) return;
 
     let cleanText = rawText;
+
+    // Парсинг Instagram (@username або instagram.com/username)
+    const instaMatch = cleanText.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/([a-zA-Z0-9_.-]+)/i) || cleanText.match(/@([a-zA-Z0-9_.-]+)/);
+    if (instaMatch) {
+      const handle = instaMatch[1] || instaMatch[0];
+      setInstagram(handle.startsWith('@') ? handle : `@${handle}`);
+      cleanText = cleanText.replace(instaMatch[0], ' ');
+    }
 
     const phoneMatch = cleanText.match(/(?:\+?38)?\s*\(?0\d{2}\)?[\s-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}/) || cleanText.match(/0\d{9}/);
     if (phoneMatch) {
@@ -329,6 +340,12 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    let cleanInstagram = instagram.trim();
+    if (cleanInstagram && !cleanInstagram.startsWith('@') && !cleanInstagram.includes('instagram.com')) {
+      cleanInstagram = `@${cleanInstagram}`;
+    }
+
     const orderData = {
       id: editingOrder ? editingOrder.id : Date.now(),
       name,
@@ -344,6 +361,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
       phone,
       city,
       address,
+      instagram: cleanInstagram,
       paymentType,
       advance: Number(advance) || 0,
       discount: Number(discount) || 0,
@@ -583,6 +601,20 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
               <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Місто" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             </div>
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Відділення / Адреса" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+            
+            {/* НОВЕ ПОЛЕ: Instagram покупця */}
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-pink-500">
+                <Instagram size={15} />
+              </span>
+              <input 
+                type="text" 
+                value={instagram} 
+                onChange={(e) => setInstagram(e.target.value)} 
+                placeholder="Instagram (@username)" 
+                className="w-full pl-9 pr-3 py-2 bg-pink-50/40 border border-pink-200 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-pink-300 focus:outline-none focus:ring-2 focus:ring-pink-400" 
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">

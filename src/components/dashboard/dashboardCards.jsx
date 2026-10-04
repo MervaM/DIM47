@@ -119,7 +119,18 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     }
     if (!text || text === '—') return;
 
-    navigator.clipboard.writeText(text);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text);
+    } else {
+      // Фолбек для застарілих браузерів / без HTTPS
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+
     setCopiedField({ orderId, field: fieldName });
     
     setTimeout(() => {
@@ -137,7 +148,10 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
 
     const textToCopy = [clientName, clientPhone, fullAddress].filter(Boolean).join('\n');
 
-    navigator.clipboard.writeText(textToCopy);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy);
+    }
+
     setCopiedField({ orderId: order.id, field: 'all' });
     setTimeout(() => {
       setCopiedField({ orderId: null, field: null });
@@ -186,7 +200,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
         return (
           <div 
             key={order.id}
-            className="production-card bg-white rounded-3xl border border-slate-200/80 shadow-xs p-4 space-y-3.5 relative flex flex-col justify-between"
+            className="production-card bg-white rounded-3xl border border-slate-200/80 shadow-sm p-4 space-y-3.5 relative flex flex-col justify-between"
             style={{ minHeight: '85vh' }}
           >
             <div className="space-y-3.5">
@@ -205,7 +219,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </select>
 
                 {order.supplier && (
-                  <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-2xs">
+                  <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-extrabold rounded-xl shadow-sm">
                     Виробник: {order.supplier}
                   </span>
                 )}
@@ -278,7 +292,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 <button 
                   type="button" 
                   onClick={() => handleCopyClientInfo(order)}
-                  className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-1.5 border rounded-lg bg-white cursor-pointer transition active:scale-95 shadow-2xs z-10"
+                  className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-1.5 border rounded-lg bg-white cursor-pointer transition active:scale-95 shadow-sm z-10"
                   title="Скопіювати всі дані покупця разом"
                 >
                   <Copy size={13} />

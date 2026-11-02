@@ -501,11 +501,11 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               </div>
 
-              {/* Блок Instagram покупця */}
-              <div className="border border-dashed border-pink-200 bg-pink-50/30 rounded-xl p-2.5 space-y-2 text-xs">
+              {/* Блок Instagram покупця (без надпису, тільки іконка та кнопка) */}
+              <div className="border border-dashed border-pink-200 bg-pink-50/30 rounded-xl p-2.5 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-pink-600 flex items-center gap-1">
-                    <AtSign size={14} /> INSTAGRAM:
+                  <span className="font-bold text-pink-600 p-0.5">
+                    <AtSign size={16} />
                   </span>
 
                   {instaHandle && !isEditingInstagram ? (
@@ -534,13 +534,13 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                       onClick={() => handleStartEditingInstagram(order)}
                       className="font-bold text-pink-600 bg-pink-100/60 hover:bg-pink-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
                     >
-                      + Додати Instagram
+                      + Додати посилання
                     </button>
                   ) : null}
                 </div>
 
                 {isEditingInstagram && (
-                  <div className="flex items-center gap-1.5 pt-1">
+                  <div className="flex items-center gap-1.5 pt-2">
                     <input
                       type="text"
                       value={instagramValues[order.id] !== undefined ? instagramValues[order.id] : (order.instagram || '')}
@@ -567,7 +567,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 )}
               </div>
 
-              {/* НОВИЙ БЛОК: Дата створення та вік замовлення */}
+              {/* Дата створення та вік замовлення */}
               <div className="flex items-center justify-between pt-1">
                 <span className="text-[11px] font-semibold text-slate-400">Створено:</span>
                 <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs ${ageInfo.styleClass}`}>

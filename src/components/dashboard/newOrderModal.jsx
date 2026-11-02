@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Search, Image as ImageIcon, Wand2, Instagram } from 'lucide-react';
+import { X, Upload, Search, Image as ImageIcon, Wand2, AtSign } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -180,7 +180,7 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
     const ukraineCities = /Волинськ|Київ|Львів|Харків|Одеса|Дніпр|Житомир|Рівне|Тернопіль|Івано-Франківськ|Чернівці|Ужгород|Хмельницький|Вінниця|Черкаси|Полтава|Суми|Запоріжжя|Миколаїв|Кропивницький|Луцьк|Чернігів|Ромни|Нововолинськ|Ковель|Володимир|Шостка|Конотоп/i;
     
     const cityMatch = 
-      cleanText.match(/(?:смт|м\.|місто|г\.)\s*([А-ЯІЄЇҐ][а-яієїґ]+(?:[- ][А-ЯІЄЇҐ][а-яієїґ]+)?)/i) || 
+      cleanText.match(/(?:смт|м\.|місто|г\.)\s*([А-ЯІЄЇҐ][а-яієїґ]+(?:[\s-][А-ЯІЄЇҐ][а-яієїґ]+)?)/i) || 
       cleanText.match(ukraineCities);
 
     if (cityMatch) {
@@ -602,10 +602,10 @@ export default function NewOrderModal({ isOpen, onClose, onSave, stock = [], edi
             </div>
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Відділення / Адреса" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
             
-            {/* НОВЕ ПОЛЕ: Instagram покупця */}
+            {/* Instagram покупця */}
             <div className="relative">
               <span className="absolute left-3 top-2.5 text-pink-500">
-                <Instagram size={15} />
+                <AtSign size={15} />
               </span>
               <input 
                 type="text" 

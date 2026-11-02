@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit2, Trash2, Check, Copy, Package, Instagram, ExternalLink } from 'lucide-react';
+import { Edit2, Trash2, Check, Copy, Package, ExternalLink, AtSign } from 'lucide-react';
 
 export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [editingTtnId, setEditingTtnId] = useState(null);
@@ -122,7 +122,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text);
     } else {
-      // Фолбек для застарілих браузерів / без HTTPS
       const textArea = document.createElement("textarea");
       textArea.value = text;
       document.body.appendChild(textArea);
@@ -285,10 +284,8 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 )}
               </div>
 
-              {/* БЛОК ДАНИХ КЛІЄНТА: Кожен рядок копіюється окремо (клік / затискання) */}
+              {/* БЛОК ДАНИХ КЛІЄНТА */}
               <div className="bg-slate-50/80 rounded-2xl p-3 text-center relative border border-slate-200/60 space-y-1.5 select-none">
-                
-                {/* Кнопка "Скопіювати все разом" */}
                 <button 
                   type="button" 
                   onClick={() => handleCopyClientInfo(order)}
@@ -298,7 +295,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   <Copy size={13} />
                 </button>
 
-                {/* Повідомлення про успішне копіювання */}
                 {copiedField.orderId === order.id && (
                   <div className="absolute -top-2 left-4 right-4 text-[11px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 py-1 rounded-lg animate-bounce z-20 shadow-md">
                     {copiedField.field === 'name' && 'ПІБ скопійовано!'}
@@ -308,7 +304,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   </div>
                 )}
 
-                {/* 1. ОКРЕМО ПІБ */}
                 <button
                   type="button"
                   onClick={(e) => handleCopySingleField(e, order.id, clientName, 'name')}
@@ -320,7 +315,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   <Copy size={12} className="text-slate-400 shrink-0 opacity-60" />
                 </button>
 
-                {/* 2. ОКРЕМО НОМЕР ТЕЛЕФОНУ */}
                 <button
                   type="button"
                   onClick={(e) => handleCopySingleField(e, order.id, clientPhone, 'phone')}
@@ -332,7 +326,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   <Copy size={11} className="text-slate-400 shrink-0 opacity-60" />
                 </button>
 
-                {/* 3. ОКРЕМО НАСЕЛЕНИЙ ПУНКТ ТА ПОШТА */}
                 <button
                   type="button"
                   onClick={(e) => handleCopySingleField(e, order.id, fullAddress, 'address')}
@@ -345,7 +338,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </button>
               </div>
 
-              {/* Блок ТТН та Списання Пакування */}
+              {/* Блок ТТН */}
               <div className="border border-dashed border-slate-200 rounded-xl p-2.5 space-y-2 bg-white text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-500 uppercase tracking-wider">TTH:</span>
@@ -484,66 +477,67 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               </div>
 
-              {/* Блок Instagram покупця */}
-              <div className="pt-2 border-t border-slate-100">
-                {isEditingInstagram ? (
-                  <div className="flex items-center gap-1.5">
-                    <div className="relative flex-1">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-pink-500">
-                        <Instagram size={14} />
-                      </span>
-                      <input
-                        type="text"
-                        value={instagramValues[order.id] !== undefined ? instagramValues[order.id] : (order.instagram || '')}
-                        onChange={(e) => setInstagramValues({ ...instagramValues, [order.id]: e.target.value })}
-                        placeholder="@nickname"
-                        className="w-full pl-8 pr-2 py-1.5 border border-pink-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-pink-500"
-                        autoFocus
-                      />
+              {/* НОВИЙ БЛОК: Instagram покупця (під ціною) */}
+              <div className="border border-dashed border-pink-200 bg-pink-50/30 rounded-xl p-2.5 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-pink-600 flex items-center gap-1">
+                    <AtSign size={14} /> INSTAGRAM:
+                  </span>
+
+                  {instaHandle && !isEditingInstagram ? (
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={instaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-bold text-pink-700 bg-pink-100/70 hover:bg-pink-100 px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                        title="Перейти в Instagram"
+                      >
+                        @{instaHandle}
+                        <ExternalLink size={11} className="text-pink-500" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleStartEditingInstagram(order)}
+                        className="text-[10px] text-pink-400 hover:text-pink-600 underline cursor-pointer"
+                      >
+                        змінити
+                      </button>
                     </div>
+                  ) : !isEditingInstagram ? (
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditingInstagram(order)}
+                      className="font-bold text-pink-600 bg-pink-100/60 hover:bg-pink-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
+                    >
+                      + Додати Instagram
+                    </button>
+                  ) : null}
+                </div>
+
+                {isEditingInstagram && (
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <input
+                      type="text"
+                      value={instagramValues[order.id] !== undefined ? instagramValues[order.id] : (order.instagram || '')}
+                      onChange={(e) => setInstagramValues({ ...instagramValues, [order.id]: e.target.value })}
+                      placeholder="@username"
+                      className="w-full px-2.5 py-1.5 border border-pink-300 rounded-lg text-xs font-semibold focus:outline-none focus:border-pink-500 bg-white"
+                      autoFocus
+                    />
                     <button
                       type="button"
                       onClick={() => handleInstagramSave(order)}
-                      className="px-2.5 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                      className="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
                     >
-                      OK
+                      Зберегти
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingInstagramId(null)}
-                      className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs cursor-pointer"
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs cursor-pointer"
                     >
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    {instaHandle ? (
-                      <div className="flex items-center gap-1.5">
-                        <Instagram size={14} className="text-pink-600 shrink-0" />
-                        <a
-                          href={instaUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs font-bold text-pink-600 hover:underline flex items-center gap-1"
-                          title="Перейти в Instagram профайл"
-                        >
-                          @{instaHandle}
-                          <ExternalLink size={11} className="text-pink-400" />
-                        </a>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400 flex items-center gap-1">
-                        <Instagram size={14} className="text-slate-300" /> Instagram не вказано
-                      </span>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => handleStartEditingInstagram(order)}
-                      className="text-[11px] font-bold text-pink-600 hover:bg-pink-50 px-2 py-1 rounded-lg transition cursor-pointer"
-                    >
-                      {instaHandle ? 'Змінити' : '+ Instagram'}
+                      Скасувати
                     </button>
                   </div>
                 )}

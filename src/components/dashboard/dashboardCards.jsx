@@ -1,19 +1,16 @@
 import React, { useState } from 'react';
-import { Edit2, Trash2, Check, Copy, Package, ExternalLink, AtSign } from 'lucide-react';
+import { Edit2, Trash2, Check, Copy, Package, ExternalLink, AtSign, Calendar } from 'lucide-react';
 
 export default function DashboardCards({ orders = [], onEditModal, onInlineSave, onDelete, onStatusChange }) {
   const [editingTtnId, setEditingTtnId] = useState(null);
   const [ttnValues, setTtnValues] = useState({});
   const [copiedTtnId, setCopiedTtnId] = useState(null);
   
-  // Стан для відображення підказки "Скопійовано" для конкретного поля клієнта
   const [copiedField, setCopiedField] = useState({ orderId: null, field: null });
 
-  // Стан для редагування Instagram
   const [editingInstagramId, setEditingInstagramId] = useState(null);
   const [instagramValues, setInstagramValues] = useState({});
 
-  // Налаштування списання пакування під час введення ТТН
   const [packagingSettings, setPackagingSettings] = useState({});
 
   const statusOptions = ['Нове', 'В роботі', 'З наявності', 'Доставка', 'Успішно', 'Відмова'];
@@ -35,6 +32,33 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
       default:
         return 'bg-slate-100 text-slate-800 border-slate-200';
     }
+  };
+
+  // Розрахунок дати та кількості днів
+  const getOrderAgeInfo = (createdAtRaw) => {
+    if (!createdAtRaw) return { formattedDate: '—', daysAgo: 0, styleClass: 'bg-slate-100 text-slate-600 border-slate-200' };
+
+    const createdDate = new Date(createdAtRaw);
+    if (isNaN(createdDate.getTime())) {
+      return { formattedDate: '—', daysAgo: 0, styleClass: 'bg-slate-100 text-slate-600 border-slate-200' };
+    }
+
+    const day = String(createdDate.getDate()).padStart(2, '0');
+    const month = String(createdDate.getMonth() + 1).padStart(2, '0');
+    const formattedDate = `${day}.${month}`;
+
+    const now = new Date();
+    const diffTime = Math.abs(now - createdDate);
+    const daysAgo = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    let styleClass = 'bg-slate-100 text-slate-600 border-slate-200'; // До 8 днів включно
+    if (daysAgo >= 9 && daysAgo <= 14) {
+      styleClass = 'bg-amber-100 text-amber-900 border-amber-300 font-bold'; // 9 - 14 днів
+    } else if (daysAgo > 14) {
+      styleClass = 'bg-rose-100 text-rose-900 border-rose-300 font-bold animate-pulse'; // Більше 14 днів
+    }
+
+    return { formattedDate, daysAgo, styleClass };
   };
 
   const handleStartEditingTtn = (order) => {
@@ -64,7 +88,8 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     }));
   };
 
-  const handleTtnSave = (order) => {
+  const handleTtnSave = (e, order) => {
+    if (e) e.preventDefault();
     const newTtn = ttnValues[order.id] !== undefined ? ttnValues[order.id] : (order.ttn || '');
     const packInfo = packagingSettings[order.id] || {};
 
@@ -80,13 +105,13 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     setEditingTtnId(null);
   };
 
-  // Збереження Instagram
   const handleStartEditingInstagram = (order) => {
     setInstagramValues(prev => ({ ...prev, [order.id]: order.instagram || '' }));
     setEditingInstagramId(order.id);
   };
 
-  const handleInstagramSave = (order) => {
+  const handleInstagramSave = (e, order) => {
+    if (e) e.preventDefault();
     const rawVal = instagramValues[order.id] !== undefined ? instagramValues[order.id] : (order.instagram || '');
     let cleanVal = rawVal.trim();
     if (cleanVal && !cleanVal.startsWith('@') && !cleanVal.includes('instagram.com')) {
@@ -111,7 +136,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     }, 1500);
   };
 
-  // Копіювання окремих полів з підтримкою кліку та довгого затискання (Long Press)
   const handleCopySingleField = (e, orderId, text, fieldName) => {
     if (e) {
       e.preventDefault();
@@ -137,7 +161,6 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
     }, 1500);
   };
 
-  // Скопіювати всі дані клієнта разом
   const handleCopyClientInfo = (order) => {
     const clientName = order.client || order.clientName || '';
     const clientPhone = order.phone || '';
@@ -191,10 +214,11 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
         const clientPhone = order.phone || '—';
         const fullAddress = [order.city, order.warehouse || order.address].filter(Boolean).join(', ') || '—';
 
-        // Форматування Instagram посилання
         const instaRaw = order.instagram || '';
         const instaHandle = instaRaw.replace('@', '').replace(/https?:\/\/(www\.)?instagram\.com\//, '').replace(/\//g, '').trim();
         const instaUrl = `https://instagram.com/${instaHandle}`;
+
+        const ageInfo = getOrderAgeInfo(order.createdAt);
 
         return (
           <div 
@@ -448,7 +472,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleTtnSave(order)}
+                        onClick={(e) => handleTtnSave(e, order)}
                         className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Check size={14} /> Зберегти
@@ -477,7 +501,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               </div>
 
-              {/* НОВИЙ БЛОК: Instagram покупця (під ціною) */}
+              {/* Блок Instagram покупця */}
               <div className="border border-dashed border-pink-200 bg-pink-50/30 rounded-xl p-2.5 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-pink-600 flex items-center gap-1">
@@ -527,7 +551,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                     />
                     <button
                       type="button"
-                      onClick={() => handleInstagramSave(order)}
+                      onClick={(e) => handleInstagramSave(e, order)}
                       className="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
                     >
                       Зберегти
@@ -542,6 +566,18 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   </div>
                 )}
               </div>
+
+              {/* НОВИЙ БЛОК: Дата створення та вік замовлення */}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] font-semibold text-slate-400">Створено:</span>
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs ${ageInfo.styleClass}`}>
+                  <Calendar size={13} />
+                  <span>{ageInfo.formattedDate}</span>
+                  <span>—</span>
+                  <span>{ageInfo.daysAgo} {ageInfo.daysAgo === 1 ? 'день' : ageInfo.daysAgo >= 2 && ageInfo.daysAgo <= 4 ? 'дні' : 'днів'}</span>
+                </div>
+              </div>
+
             </div>
           </div>
         );

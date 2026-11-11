@@ -174,21 +174,31 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     setIsEditingValeriy(false);
   };
 
+  // Розрахунок витрат для виробника Міла (якщо supplier містить 'міл')
   const milaOrdersCost = orders
-    .filter(o => (o.supplier || 'Міла') === 'Міла' && Number(o.cost) > 0)
+    .filter(o => {
+      const sup = (o.supplier || 'міла').toLowerCase();
+      return sup.includes('міл') && Number(o.cost) > 0;
+    })
     .reduce((sum, o) => {
-      const costVal = o.currency === 'USD' ? Number(o.cost) * usdRate : Number(o.cost);
-      return sum + costVal;
+      const costVal = Number(o.cost) || 0;
+      const finalCostUah = o.currency === 'USD' ? costVal * usdRate : costVal;
+      return sum + finalCostUah;
     }, 0);
 
   const totalMilaUsed = milaOrdersCost + milaExtraCost;
   const milaRemainingBalance = milaAdvance - totalMilaUsed;
 
+  // Розрахунок виплат для виробника Валерій (якщо supplier містить 'валєр')
   const autoValeriyCost = orders
-    .filter(o => (o.supplier || '').toLowerCase().includes('валєр') && Number(o.cost) > 0)
+    .filter(o => {
+      const sup = (o.supplier || '').toLowerCase();
+      return sup.includes('валєр') && Number(o.cost) > 0;
+    })
     .reduce((sum, o) => {
-      const costVal = o.currency === 'USD' ? Number(o.cost) * usdRate : Number(o.cost);
-      return sum + costVal;
+      const costVal = Number(o.cost) || 0;
+      const finalCostUah = o.currency === 'USD' ? costVal * usdRate : costVal;
+      return sum + finalCostUah;
     }, 0);
 
   const valeriyTotalToPay = valeriyManualOverride !== null ? valeriyManualOverride : autoValeriyCost;
@@ -471,12 +481,12 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
 
       if (String(tx.id).startsWith('ord-cost-')) {
         const orderId = tx.id.replace('ord-cost-', '');
-        await updateDoc(doc(db, 'orders', orderId), { cost: newAmount });
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, cost: newAmount } : o));
+        await updateDoc(doc(db, 'orders', orderId), { cost: newAmount, currency: 'UAH' });
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, cost: newAmount, currency: 'UAH' } : o));
       } else if (String(tx.id).startsWith('avail-cost-')) {
         const itemId = tx.id.replace('avail-cost-', '');
-        await updateDoc(doc(db, 'stock', itemId), { cost: newAmount });
-        setStock(prev => prev.map(s => s.id === itemId ? { ...s, cost: newAmount } : s));
+        await updateDoc(doc(db, 'stock', itemId), { cost: newAmount, currency: 'UAH' });
+        setStock(prev => prev.map(s => s.id === itemId ? { ...s, cost: newAmount, currency: 'UAH' } : s));
       } else if (String(tx.id).startsWith('ord-rev-')) {
         const orderId = tx.id.replace('ord-rev-', '');
         await updateDoc(doc(db, 'orders', orderId), { price: newAmount });
@@ -634,8 +644,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg"><TrendingUp size={16} /></span>
           </div>
           <div className="text-xl font-bold text-slate-900">
-            {totalIncome.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-            <span className="text-xs font-normal text-slate-400">(${(totalIncome / usdRate).toFixed(2)})</span>
+            ${(totalIncome / usdRate).toFixed(2)}{' '}
+            <span className="text-xs font-normal text-slate-400">({totalIncome.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
           </div>
           <p className="text-[10px] text-slate-400">Успішні оплати + передплати</p>
         </div>
@@ -646,8 +656,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg"><TrendingDown size={16} /></span>
           </div>
           <div className="text-xl font-bold text-slate-900">
-            {totalExpense.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-            <span className="text-xs font-normal text-slate-400">(${(totalExpense / usdRate).toFixed(2)})</span>
+            ${(totalExpense / usdRate).toFixed(2)}{' '}
+            <span className="text-xs font-normal text-slate-400">({totalExpense.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
           </div>
           <p className="text-[10px] text-slate-400">Авто-пошиття (пар) + податки тощо</p>
         </div>
@@ -658,8 +668,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><DollarSign size={16} /></span>
           </div>
           <div className={`text-xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-            {netProfit.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-            <span className="text-xs font-normal text-slate-400">(${(netProfit / usdRate).toFixed(2)})</span>
+            ${(netProfit / usdRate).toFixed(2)}{' '}
+            <span className="text-xs font-normal text-slate-400">({netProfit.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
           </div>
           <p className="text-[10px] text-slate-400">Різниця доходів і витрат</p>
         </div>
@@ -675,8 +685,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             </span>
           </div>
           <div className="text-xl font-black text-amber-950">
-            {grandTotalInvested.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-            <span className="text-xs font-normal text-slate-500">(${(grandTotalInvested / usdRate).toFixed(2)})</span>
+            ${(grandTotalInvested / usdRate).toFixed(2)}{' '}
+            <span className="text-xs font-normal text-slate-500">({grandTotalInvested.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
           </div>
           <p className="text-[10px] font-semibold text-amber-800">Картки по інвесторах →</p>
         </div>
@@ -716,8 +726,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100 space-y-0.5">
               <span className="text-[10px] text-slate-500 font-semibold block">Внесений аванс:</span>
               <span className="font-bold text-slate-900">
-                {milaAdvance.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-                <span className="text-[9px] text-slate-400">(${(milaAdvance / usdRate).toFixed(2)})</span>
+                ${(milaAdvance / usdRate).toFixed(2)}{' '}
+                <span className="text-[9px] text-slate-400">({milaAdvance.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
               </span>
             </div>
             
@@ -736,8 +746,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               </div>
               {!isEditingMilaExtra ? (
                 <span className="font-bold text-rose-600 block">
-                  -{totalMilaUsed.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-                  <span className="text-[9px] text-slate-400">(${(totalMilaUsed / usdRate).toFixed(2)})</span>
+                  -${(totalMilaUsed / usdRate).toFixed(2)}{' '}
+                  <span className="text-[9px] text-slate-400">(-{totalMilaUsed.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
                 </span>
               ) : (
                 <div className="flex items-center gap-1 pt-1">
@@ -758,8 +768,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100 space-y-0.5">
               <span className="text-[10px] text-slate-500 font-semibold block">Залишок у Міли:</span>
               <span className={`font-bold text-sm ${milaRemainingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {milaRemainingBalance.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-                <span className="text-[9px] text-slate-400">(${(milaRemainingBalance / usdRate).toFixed(2)})</span>
+                ${(milaRemainingBalance / usdRate).toFixed(2)}{' '}
+                <span className="text-[9px] text-slate-400">({milaRemainingBalance.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
               </span>
             </div>
           </div>
@@ -809,8 +819,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               )}
             </div>
             <div className="text-xl font-black text-purple-900">
-              {valeriyTotalToPay.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-              <span className="text-xs font-normal text-slate-400">(${(valeriyTotalToPay / usdRate).toFixed(2)})</span>
+              ${(valeriyTotalToPay / usdRate).toFixed(2)}{' '}
+              <span className="text-xs font-normal text-slate-400">({valeriyTotalToPay.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
             </div>
           </div>
           <p className="text-[10px] text-purple-900/70 font-medium">Розраховується автоматично по пошитих замовленнях або редагується вручну.</p>
@@ -837,8 +847,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               <BarChart2 size={12} className="text-slate-400 group-hover:text-slate-900 transition" />
             </div>
             <div className="text-xs font-black text-slate-900">
-              {item.stats.total.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-              <span className="text-[10px] font-normal text-slate-400">(${(item.stats.total / usdRate).toFixed(2)})</span>
+              ${(item.stats.total / usdRate).toFixed(2)}{' '}
+              <span className="text-[10px] font-normal text-slate-400">({item.stats.total.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
             </div>
             <div className="text-[9px] text-slate-500 font-medium truncate">
               ~{item.stats.avg} грн ({item.stats.count} завед.)
@@ -949,8 +959,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                           ) : (
                             <div className="flex items-center gap-2 group/edit">
                               <span>
-                                {tx.type === 'Витрата' ? '-' : '+'}{Number(tx.amount).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
-                                <span className="text-[10px] font-normal text-slate-400">(${amountUsd})</span>
+                                {tx.type === 'Витрата' ? '-' : '+'}${amountUsd}{' '}
+                                <span className="text-[10px] font-normal text-slate-400">({Number(tx.amount).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн)</span>
                               </span>
                               {!String(tx.id).startsWith('stock-') && (
                                 <button 
@@ -993,24 +1003,24 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200 space-y-1">
               <span className="text-xs font-semibold text-emerald-800">Доходи</span>
               <div className="text-xl font-black text-emerald-950">
-                {totalIncome.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн{' '}
-                <span className="text-xs font-normal text-slate-500">(${(totalIncome / usdRate).toFixed(2)})</span>
+                ${(totalIncome / usdRate).toFixed(2)}{' '}
+                <span className="text-xs font-normal text-slate-500">({totalIncome.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн)</span>
               </div>
             </div>
 
             <div className="bg-rose-50/60 p-4 rounded-xl border border-rose-200 space-y-1">
               <span className="text-xs font-semibold text-rose-800">Витрати</span>
               <div className="text-xl font-black text-rose-950">
-                {totalExpense.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн{' '}
-                <span className="text-xs font-normal text-slate-500">(${(totalExpense / usdRate).toFixed(2)})</span>
+                ${(totalExpense / usdRate).toFixed(2)}{' '}
+                <span className="text-xs font-normal text-slate-500">({totalExpense.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн)</span>
               </div>
             </div>
 
             <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-200 space-y-1">
               <span className="text-xs font-semibold text-indigo-800">Чистий прибуток</span>
               <div className="text-xl font-black text-indigo-950">
-                {netProfit.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн{' '}
-                <span className="text-xs font-normal text-slate-500">(${(netProfit / usdRate).toFixed(2)})</span>
+                ${(netProfit / usdRate).toFixed(2)}{' '}
+                <span className="text-xs font-normal text-slate-500">({netProfit.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн)</span>
               </div>
             </div>
           </div>
@@ -1048,20 +1058,20 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                         <UserCheck size={16} className="text-amber-700" /> {inv.name}
                       </span>
                       <span className="text-xs font-black text-amber-900 bg-amber-200/50 px-2.5 py-0.5 rounded-full">
-                        Внесено: {inv.totalInvested.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн
+                        Внесено: ${(inv.totalInvested / usdRate).toFixed(2)} ({inv.totalInvested.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн)
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 space-y-0.5">
                         <span className="text-[10px] text-slate-500 font-semibold block">Повернуто інвестору:</span>
-                        <span className="text-sm font-bold text-emerald-600">{inv.returned.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн</span>
+                        <span className="text-sm font-bold text-emerald-600">${(inv.returned / usdRate).toFixed(2)} ({inv.returned.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн)</span>
                       </div>
 
                       <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 space-y-0.5">
                         <span className="text-[10px] text-slate-500 font-semibold block">Залишок до повернення:</span>
                         <span className={`text-sm font-bold ${inv.debtRemaining > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                          {inv.debtRemaining.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн
+                          ${(inv.debtRemaining / usdRate).toFixed(2)} ({inv.debtRemaining.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн)
                         </span>
                       </div>
                     </div>
@@ -1102,8 +1112,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                       <div className="text-[10px] text-slate-400">{t.date}</div>
                     </div>
                     <div className="font-extrabold text-slate-900">
-                      {Number(t.amount).toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн{' '}
-                      <span className="text-slate-400 font-normal">(${(t.amount / usdRate).toFixed(2)})</span>
+                      ${(t.amount / usdRate).toFixed(2)}{' '}
+                      <span className="text-slate-400 font-normal">({Number(t.amount).toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн)</span>
                     </div>
                   </div>
                 ))

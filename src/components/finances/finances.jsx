@@ -153,11 +153,13 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     setIsEditingValeriy(false);
   };
 
-  // Витрати Міли
+  // Покращене розпізнавання виробників (Міла та Валерій)
   const milaOrdersCost = orders
     .filter(o => {
-      const sup = (o.supplier || 'міла').toLowerCase();
-      return sup.includes('міл') && Number(o.cost) > 0;
+      const sup = (o.supplier || '').toLowerCase();
+      // Якщо виробник не вказаний або містить "міл"
+      const isMila = !sup || sup.includes('міла') || sup.includes('mila') || sup.includes('міл');
+      return isMila && Number(o.cost) > 0;
     })
     .reduce((sum, o) => {
       const costVal = Number(o.cost) || 0;
@@ -168,11 +170,10 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
   const totalMilaUsed = milaOrdersCost + milaExtraCost;
   const milaRemainingBalance = milaAdvance - totalMilaUsed;
 
-  // Витрати Валерія
   const autoValeriyCost = orders
     .filter(o => {
       const sup = (o.supplier || '').toLowerCase();
-      return sup.includes('валєр') && Number(o.cost) > 0;
+      return (sup.includes('валєр') || sup.includes('valer')) && Number(o.cost) > 0;
     })
     .reduce((sum, o) => {
       const costVal = Number(o.cost) || 0;
@@ -285,7 +286,12 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       };
     });
 
-  const manualFinances = finances.map(tx => ({ ...tx, amount: Number(tx.amount) || 0, createdAt: tx.createdAt || new Date().toISOString() }));
+  const manualFinances = finances.map(tx => ({ 
+    ...tx, 
+    amount: Number(tx.amount) || 0, 
+    category: tx.category || (tx.type === 'Інвестиція' ? 'Інвестиції' : 'Інше'),
+    createdAt: tx.createdAt || new Date().toISOString() 
+  }));
 
   const allTransactions = [
     ...orderTailoringCostTx, 
@@ -317,15 +323,16 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
 
   const getInvestorsAnalytics = () => {
     const investorMap = {};
-    finances.forEach(tx => {
-      if (tx.type === 'Інвестиція' || tx.type === 'Повернення інвестиції') {
+    allTransactions.forEach(tx => {
+      const txType = (tx.type || '').toLowerCase();
+      if (txType.includes('інвестиці') || txType.includes('повернення інвестиції')) {
         const name = (tx.investorName || tx.comment || 'Інвестор').trim();
         if (!investorMap[name]) investorMap[name] = { name, totalInvested: 0, targetReturn: 0, returned: 0, transactions: [] };
         investorMap[name].transactions.push(tx);
-        if (tx.type === 'Інвестиція') {
+        if (txType === 'інвестиція') {
           investorMap[name].totalInvested += Number(tx.amount) || 0;
           investorMap[name].targetReturn += Number(tx.returnAmount || tx.amount) || 0;
-        } else if (tx.type === 'Повернення інвестиції') {
+        } else if (txType.includes('повернення')) {
           investorMap[name].returned += Number(tx.amount) || 0;
         }
       }
@@ -353,10 +360,10 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     else if (selectedFilter === 'податки') matchesFilter = cat.includes('податк');
     else if (selectedFilter === 'бухгалтер') matchesFilter = cat.includes('бухгалтер');
     else if (selectedFilter === 'зарплата') matchesFilter = cat.includes('зарплат');
+    else if (selectedFilter === 'інвестиції') matchesFilter = txType.includes('інвестиці') || cat.includes('інвест');
     else if (selectedFilter === 'успішно') matchesFilter = cat === 'успішно';
     else if (selectedFilter === 'передплата') matchesFilter = cat === 'передплата';
-    else if (selectedFilter === 'інвестиція') matchesFilter = txType.includes('інвестиція');
-    else if (selectedFilter === 'інше') matchesFilter = !['пошиття', 'взуття', 'коробки', 'пильовики', 'реклама', 'податк', 'бухгалтер', 'зарплат', 'успішно', 'передплата'].some(k => cat.includes(k)) && !txType.includes('інвестиція');
+    else if (selectedFilter === 'інше') matchesFilter = !['пошиття', 'взуття', 'коробки', 'пильовики', 'реклама', 'податк', 'бухгалтер', 'зарплат', 'успішно', 'передплата', 'інвестиці'].some(k => cat.includes(k) || txType.includes(k));
 
     return matchesSearch && matchesFilter;
   });
@@ -392,10 +399,13 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }
 
     const newTx = {
-      date, type, category: type === 'Інвестиція' ? 'Інвестиції' : (category || 'Реклама'),
-      amount: finalAmount, investorName: type.includes('Інвестиція') ? investorName : '',
+      date, 
+      type, 
+      category: type.includes('Інвестиція') ? 'Інвестиції' : (category || 'Реклама'),
+      amount: finalAmount, 
+      investorName: type.includes('Інвестиція') ? investorName : '',
       returnAmount: type === 'Інвестиція' ? Number(returnAmount || finalAmount) : 0,
-      comment: type === 'Інвестиція' ? `Інвестор: ${investorName || 'Без імені'}. ${commentText}` : commentText,
+      comment: type.includes('Інвестиція') ? `Інвестор: ${investorName || 'Без імені'}. ${commentText}` : commentText,
       createdAt: new Date().toISOString()
     };
 

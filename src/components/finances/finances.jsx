@@ -25,49 +25,39 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
   const [stock, setStock] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Вигляд: 'table' або 'chart'
   const [viewMode, setViewMode] = useState('table');
-
-  // Фільтри періодів
-  const [periodFilter, setPeriodFilter] = useState('all'); // 'all', 'month', 'week'
+  const [periodFilter, setPeriodFilter] = useState('all');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [selectedWeek, setSelectedWeek] = useState('');
 
-  // Курс долара для прив'язки закупівлі/пошиття
   const [usdRate, setUsdRate] = useState(41.5);
   const [isEditingUsd, setIsEditingUsd] = useState(false);
   const [usdInput, setUsdInput] = useState('41.5');
 
-  // Пошук та категорії
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('всі');
   const [selectedCategoryAnalytics, setSelectedCategoryAnalytics] = useState(null);
   const [showInvestmentsModal, setShowInvestmentsModal] = useState(false);
 
-  // Стейт швидкого редагування суми
   const [editingTxId, setEditingTxId] = useState(null);
   const [editingAmount, setEditingAmount] = useState('');
 
-  // Стейт редагування авансу Міли
   const [milaAdvance, setMilaAdvance] = useState(59000);
   const [isEditingMila, setIsEditingMila] = useState(false);
   const [milaAdvanceInput, setMilaAdvanceInput] = useState('59000');
 
-  // Стейт ручної корекції використаного пошиття Міли
   const [milaExtraCost, setMilaExtraCost] = useState(0);
   const [isEditingMilaExtra, setIsEditingMilaExtra] = useState(false);
   const [milaExtraInput, setMilaExtraInput] = useState('0');
 
-  // Стейт ручної корекції суми виплати Валерію
   const [valeriyManualOverride, setValeriyManualOverride] = useState(null);
   const [isEditingValeriy, setIsEditingValeriy] = useState(false);
   const [valeriyInput, setValeriyInput] = useState('0');
 
-  // Стейт форми додавання
   const [type, setType] = useState('Витрата');
   const [category, setCategory] = useState('Реклама');
   const [amount, setAmount] = useState('');
-  const [currencyMode, setCurrencyMode] = useState('UAH'); // 'UAH' або 'USD'
+  const [currencyMode, setCurrencyMode] = useState('UAH');
   const [investorName, setInvestorName] = useState('');
   const [returnAmount, setReturnAmount] = useState('');
   const [comment, setComment] = useState('');
@@ -75,7 +65,27 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
 
   useEffect(() => {
     fetchFirestoreData();
+    fetchNbuUsdRate();
   }, []);
+
+  const fetchNbuUsdRate = async () => {
+    try {
+      const response = await fetch('https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json');
+      const data = await response.json();
+      if (data && data[0] && data[0].rate) {
+        const liveRate = Number(data[0].rate);
+        setUsdRate(liveRate);
+        setUsdInput(String(liveRate));
+        try {
+          await setDoc(doc(db, 'settings', 'usd_rate'), { value: liveRate }, { merge: true });
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    } catch (error) {
+      console.error('Не вдалося завантажити курс НБУ:', error);
+    }
+  };
 
   const fetchFirestoreData = async () => {
     try {
@@ -106,8 +116,11 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
           setValeriyInput(String(d.data().value));
         }
         if (d.id === 'usd_rate' && d.data().value !== undefined) {
-          setUsdRate(Number(d.data().value) || 41.5);
-          setUsdInput(String(d.data().value));
+          const savedRate = Number(d.data().value);
+          if (!isNaN(savedRate) && savedRate > 0) {
+            setUsdRate(savedRate);
+            setUsdInput(String(savedRate));
+          }
         }
       });
     } catch (error) {
@@ -161,11 +174,9 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     setIsEditingValeriy(false);
   };
 
-  // Розрахунок по виробниках (з урахуванням USD якщо ціна задана в доларах або через курс)
   const milaOrdersCost = orders
     .filter(o => (o.supplier || 'Міла') === 'Міла' && Number(o.cost) > 0)
     .reduce((sum, o) => {
-      // Якщо замовлення прив'язане до USD (наприклад o.currency === 'USD'), множимо на usdRate
       const costVal = o.currency === 'USD' ? Number(o.cost) * usdRate : Number(o.cost);
       return sum + costVal;
     }, 0);
@@ -191,33 +202,41 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     }, 0);
   };
 
-  // Формування автоматичних транзакцій з урахуванням витрат на пошиття (які тепер автоматично йдуть у витрати)
   const orderTailoringCostTx = orders
-    .filter(o => Number(o.cost) > 0)
     .map(o => {
-      const finalCostUah = o.currency === 'USD' ? Number(o.cost) * usdRate : Number(o.cost);
+      const costVal = Number(o.cost) || 0;
+      if (costVal <= 0) return null;
+      const finalCostUah = o.currency === 'USD' ? costVal * usdRate : costVal;
+      const costUsd = (finalCostUah / usdRate).toFixed(2);
       return {
         id: `ord-cost-${o.id}`,
-        date: o.date || 'Замовлення',
+        date: o.date || o.createdAt ? new Date(o.createdAt || Date.now()).toISOString().split('T')[0] : 'Замовлення',
+        createdAt: o.createdAt || new Date().toISOString(),
         type: 'Витрата',
         category: 'Пошиття взуття',
-        comment: `${o.productTitle || o.name || 'Взуття'} [Виробник: ${o.supplier || 'Міла'}]${o.currency === 'USD' ? ` ($${o.cost})` : ''}`,
+        comment: `${o.productTitle || o.name || 'Взуття'} [Виробник: ${o.supplier || 'Міла'}]`,
         amount: Number(finalCostUah.toFixed(2)),
+        amountUsd: Number(costUsd),
         isAuto: true
       };
-    });
+    })
+    .filter(Boolean);
 
   const availabilityShoesCostTx = stock
     .filter(item => item.folderId === 'availability' && Number(item.cost) > 0)
     .map(item => {
-      const finalCostUah = item.currency === 'USD' ? Number(item.cost) * usdRate : Number(item.cost);
+      const costVal = Number(item.cost) || 0;
+      const finalCostUah = item.currency === 'USD' ? costVal * usdRate : costVal;
+      const costUsd = (finalCostUah / usdRate).toFixed(2);
       return {
         id: `avail-cost-${item.id}`,
         date: item.date || item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : 'Наявність',
+        createdAt: item.createdAt || new Date().toISOString(),
         type: 'Витрата',
         category: 'Пошиття взуття',
         comment: `${item.name || 'Взуття'} (Наявність${item.size ? `, ${item.size} р.` : ''})`,
         amount: Number(finalCostUah.toFixed(2)),
+        amountUsd: Number(costUsd),
         isAuto: true
       };
     });
@@ -227,30 +246,47 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     .map(o => {
       const fullPrice = Number(o.price) || 0;
       const adv = Number(o.advance) || Number(o.prepayment) || 0;
-      const finalPayment = fullPrice > adv ? fullPrice - adv : fullPrice;
+      let finalPayment = fullPrice > adv ? fullPrice - adv : fullPrice;
+
+      let novapayFee = 0;
+      const isCod = o.paymentType === 'afterpay' || o.isCashOnDelivery || (finalPayment > 0 && adv === 0); 
+      if (isCod && finalPayment > 0) {
+        novapayFee = 20 + (finalPayment * 0.02);
+        finalPayment = finalPayment - novapayFee;
+      }
+
+      const usdVal = (finalPayment / usdRate).toFixed(2);
 
       return {
         id: `ord-rev-${o.id}`,
-        date: o.date || 'Замовлення',
+        date: o.date || o.createdAt ? new Date(o.createdAt || Date.now()).toISOString().split('T')[0] : 'Замовлення',
+        createdAt: o.createdAt || new Date().toISOString(),
         type: 'Дохід',
         category: 'Успішно',
-        comment: `Залишок після передплати: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
+        comment: `Оплата: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})${novapayFee > 0 ? ` [Комісія NovaPay: -${novapayFee.toFixed(2)} грн]` : ''}`,
         amount: Number(finalPayment.toFixed(2)),
+        amountUsd: Number(usdVal),
         isAuto: true
       };
     });
 
   const ordersAdvanceTx = orders
     .filter(o => Number(o.advance) > 0 || Number(o.prepayment) > 0)
-    .map(o => ({
-      id: `ord-adv-${o.id}`,
-      date: o.date || 'Замовлення',
-      type: 'Дохід',
-      category: 'Передплата',
-      comment: `Передплата: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
-      amount: Number(Number(o.advance || o.prepayment).toFixed(2)),
-      isAuto: true
-    }));
+    .map(o => {
+      const advVal = Number(o.advance || o.prepayment);
+      const usdVal = (advVal / usdRate).toFixed(2);
+      return {
+        id: `ord-adv-${o.id}`,
+        date: o.date || o.createdAt ? new Date(o.createdAt || Date.now()).toISOString().split('T')[0] : 'Замовлення',
+        createdAt: o.createdAt || new Date().toISOString(),
+        type: 'Дохід',
+        category: 'Передплата',
+        comment: `Передплата: ${o.productTitle || o.name || 'Взуття'} (${o.client || 'Клієнт'})`,
+        amount: Number(advVal.toFixed(2)),
+        amountUsd: Number(usdVal),
+        isAuto: true
+      };
+    });
 
   const stockTx = stock
     .filter(item => {
@@ -263,18 +299,33 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       const usedQty = getUsedPackagingCount(item.name);
       const totalInitialQty = currentQty + usedQty;
       const unitCost = Number(item.cost) || Number(item.price) || 0;
+      const totalUah = totalInitialQty * unitCost;
+      const usdVal = (totalUah / usdRate).toFixed(2);
       const catName = name.includes('коробк') ? 'Коробки' : 'Пильовики';
 
       return {
         id: `stock-${item.id}`,
         date: item.createdAt ? new Date(item.createdAt).toISOString().split('T')[0] : 'Склад',
+        createdAt: item.createdAt || new Date().toISOString(),
         type: 'Витрата',
         category: catName,
         comment: `${item.name} (${totalInitialQty} шт × ${unitCost} грн)`,
-        amount: Number((totalInitialQty * unitCost).toFixed(2)),
+        amount: Number(totalUah.toFixed(2)),
+        amountUsd: Number(usdVal),
         isAuto: true
       };
     });
+
+  const manualFinances = finances.map(tx => {
+    const uah = Number(tx.amount) || 0;
+    const usd = (uah / usdRate).toFixed(2);
+    return {
+      ...tx,
+      amount: uah,
+      amountUsd: Number(usd),
+      createdAt: tx.createdAt || new Date().toISOString()
+    };
+  });
 
   const allTransactions = [
     ...orderTailoringCostTx, 
@@ -282,10 +333,11 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     ...successfulOrdersTx, 
     ...ordersAdvanceTx, 
     ...stockTx, 
-    ...finances
+    ...manualFinances
   ];
 
-  // Фільтрація за періодом (тижні, місяці)
+  allTransactions.sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+
   const filteredByPeriodTransactions = allTransactions.filter(tx => {
     if (periodFilter === 'all') return true;
     if (!tx.date || tx.date === 'Замовлення' || tx.date === 'Наявність' || tx.date === 'Склад') return true;
@@ -297,9 +349,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
       const txMonth = txDate.toISOString().slice(0, 7);
       return txMonth === selectedMonth;
     } else if (periodFilter === 'week') {
-      // Порівняння по тижню
       if (!selectedWeek) return true;
-      // Простий перевірочний фільтр по датах тижня
       const year = txDate.getFullYear();
       const firstDayOfYear = new Date(year, 0, 1);
       const pastDaysOfYear = (txDate - firstDayOfYear) / 86400000;
@@ -384,7 +434,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
     let finalAmount = Number(amount);
     let commentText = comment;
 
-    // Якщо введено в доларах, конвертуємо в гривні за поточним курсом
     if (currencyMode === 'USD') {
       finalAmount = Number((Number(amount) * usdRate).toFixed(2));
       commentText = `[ У валюті: $${amount} за курсом ${usdRate} ] ${comment}`;
@@ -465,21 +514,18 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
 
   return (
     <div className="space-y-4 p-3 sm:p-4 max-w-5xl mx-auto">
-      
-      {/* ПАНЕЛЬ КУРСУ ДОЛАРА ТА ПЕРІОДІВ (Звітність по тижнях, місяцях) */}
       <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-        
-        {/* Керування курсом долара для закупівлі */}
         <div className="flex items-center gap-2 bg-emerald-50/60 px-3 py-1.5 rounded-xl border border-emerald-200 text-xs">
-          <span className="font-bold text-emerald-900">Курс USD:</span>
+          <span className="font-bold text-emerald-900">Курс USD (НБУ):</span>
           {!isEditingUsd ? (
             <div className="flex items-center gap-2">
               <span className="font-black text-emerald-950">{usdRate} грн/$</span>
               <button 
+                type="button"
                 onClick={() => { setIsEditingUsd(true); setUsdInput(String(usdRate)); }}
                 className="text-[10px] text-emerald-700 underline cursor-pointer"
               >
-                змінити
+                змінити вручну
               </button>
             </div>
           ) : (
@@ -492,13 +538,12 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                 className="w-16 px-1.5 py-0.5 bg-white border border-emerald-300 rounded text-xs"
                 autoFocus
               />
-              <button onClick={handleSaveUsdRate} className="p-1 bg-emerald-600 text-white rounded"><Check size={12} /></button>
-              <button onClick={() => setIsEditingUsd(false)} className="p-1 bg-slate-200 text-slate-700 rounded"><X size={12} /></button>
+              <button type="button" onClick={handleSaveUsdRate} className="p-1 bg-emerald-600 text-white rounded"><Check size={12} /></button>
+              <button type="button" onClick={() => setIsEditingUsd(false)} className="p-1 bg-slate-200 text-slate-700 rounded"><X size={12} /></button>
             </div>
           )}
         </div>
 
-        {/* Фільтри періодів (Тижні / Місяці / Весь час) */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
             <Calendar size={14} /> Період:
@@ -550,7 +595,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
           )}
         </div>
 
-        {/* Перемикач виглядів: Таблиця / Графік */}
         <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
           <button
             type="button"
@@ -573,7 +617,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       </div>
 
-      {/* Кнопка додавання */}
       <div className="flex justify-end">
         <button 
           type="button"
@@ -584,14 +627,16 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </button>
       </div>
 
-      {/* Основні картки фінансів */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
           <div className="flex justify-between items-center text-slate-500 text-xs font-medium">
             <span>Загальний дохід</span>
             <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg"><TrendingUp size={16} /></span>
           </div>
-          <div className="text-xl font-bold text-slate-900">{totalIncome.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</div>
+          <div className="text-xl font-bold text-slate-900">
+            {totalIncome.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+            <span className="text-xs font-normal text-slate-400">(${(totalIncome / usdRate).toFixed(2)})</span>
+          </div>
           <p className="text-[10px] text-slate-400">Успішні оплати + передплати</p>
         </div>
 
@@ -600,7 +645,10 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <span>Загальні витрати</span>
             <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg"><TrendingDown size={16} /></span>
           </div>
-          <div className="text-xl font-bold text-slate-900">{totalExpense.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</div>
+          <div className="text-xl font-bold text-slate-900">
+            {totalExpense.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+            <span className="text-xs font-normal text-slate-400">(${(totalExpense / usdRate).toFixed(2)})</span>
+          </div>
           <p className="text-[10px] text-slate-400">Авто-пошиття (пар) + податки тощо</p>
         </div>
 
@@ -610,7 +658,8 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><DollarSign size={16} /></span>
           </div>
           <div className={`text-xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-            {netProfit.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн
+            {netProfit.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+            <span className="text-xs font-normal text-slate-400">(${(netProfit / usdRate).toFixed(2)})</span>
           </div>
           <p className="text-[10px] text-slate-400">Різниця доходів і витрат</p>
         </div>
@@ -625,12 +674,14 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               <Briefcase size={16} />
             </span>
           </div>
-          <div className="text-xl font-black text-amber-950">{grandTotalInvested.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</div>
+          <div className="text-xl font-black text-amber-950">
+            {grandTotalInvested.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+            <span className="text-xs font-normal text-slate-500">(${(grandTotalInvested / usdRate).toFixed(2)})</span>
+          </div>
           <p className="text-[10px] font-semibold text-amber-800">Картки по інвесторах →</p>
         </div>
       </div>
 
-      {/* БЛОК: БАЛАНС ВИРОБНИКІВ (МІЛА ТА ВАЛЕРІЙ) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="bg-indigo-50/40 p-4 rounded-2xl border border-indigo-200 shadow-xs space-y-3">
           <div className="flex justify-between items-center">
@@ -664,7 +715,10 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100 space-y-0.5">
               <span className="text-[10px] text-slate-500 font-semibold block">Внесений аванс:</span>
-              <span className="font-bold text-slate-900">{milaAdvance.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</span>
+              <span className="font-bold text-slate-900">
+                {milaAdvance.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+                <span className="text-[9px] text-slate-400">(${(milaAdvance / usdRate).toFixed(2)})</span>
+              </span>
             </div>
             
             <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100 space-y-0.5">
@@ -681,7 +735,10 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                 )}
               </div>
               {!isEditingMilaExtra ? (
-                <span className="font-bold text-rose-600 block">-{totalMilaUsed.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</span>
+                <span className="font-bold text-rose-600 block">
+                  -{totalMilaUsed.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+                  <span className="text-[9px] text-slate-400">(${(totalMilaUsed / usdRate).toFixed(2)})</span>
+                </span>
               ) : (
                 <div className="flex items-center gap-1 pt-1">
                   <input 
@@ -701,11 +758,12 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100 space-y-0.5">
               <span className="text-[10px] text-slate-500 font-semibold block">Залишок у Міли:</span>
               <span className={`font-bold text-sm ${milaRemainingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {milaRemainingBalance.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн
+                {milaRemainingBalance.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+                <span className="text-[9px] text-slate-400">(${(milaRemainingBalance / usdRate).toFixed(2)})</span>
               </span>
             </div>
           </div>
-          <p className="text-[10px] text-indigo-900/70 font-medium">Автоматично мінусується пошиття пар за курсом USD + витрати на розробку.</p>
+          <p className="text-[10px] text-indigo-900/70 font-medium">Автоматично мінусується пошиття за курсом НБУ + витрати на розробку.</p>
         </div>
 
         <div className="bg-purple-50/40 p-4 rounded-2xl border border-purple-200 shadow-xs space-y-3">
@@ -751,14 +809,14 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               )}
             </div>
             <div className="text-xl font-black text-purple-900">
-              {valeriyTotalToPay.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн
+              {valeriyTotalToPay.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+              <span className="text-xs font-normal text-slate-400">(${(valeriyTotalToPay / usdRate).toFixed(2)})</span>
             </div>
           </div>
           <p className="text-[10px] text-purple-900/70 font-medium">Розраховується автоматично по пошитих замовленнях або редагується вручну.</p>
         </div>
       </div>
 
-      {/* КАТЕГОРІЇ АНАЛІТИКИ (Коробки, Пильовики, Пошиття, Реклама, Податки, Бухгалтер, Зарплата) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
           { key: 'коробки', title: 'Коробки', stats: boxesStats, color: 'border-amber-200 bg-amber-50/30' },
@@ -778,7 +836,10 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
               <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{item.title}</span>
               <BarChart2 size={12} className="text-slate-400 group-hover:text-slate-900 transition" />
             </div>
-            <div className="text-xs font-black text-slate-900">{item.stats.total.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</div>
+            <div className="text-xs font-black text-slate-900">
+              {item.stats.total.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+              <span className="text-[10px] font-normal text-slate-400">(${(item.stats.total / usdRate).toFixed(2)})</span>
+            </div>
             <div className="text-[9px] text-slate-500 font-medium truncate">
               ~{item.stats.avg} грн ({item.stats.count} завед.)
             </div>
@@ -786,7 +847,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         ))}
       </div>
 
-      {/* ГОЛОВНИЙ ВИГЛЯД: ТАБЛИЦЯ АБО ГРАФІК */}
       {viewMode === 'table' ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 space-y-3">
           <div className="flex flex-col sm:flex-row gap-2 justify-between items-center">
@@ -849,111 +909,114 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                     </td>
                   </tr>
                 ) : (
-                  filteredTransactions.map(tx => (
-                    <tr key={tx.id} className="hover:bg-slate-50/70 transition group">
-                      <td className="py-2 text-slate-500 text-[10px]">
-                        <span className="flex items-center gap-1"><Calendar size={11} /> {tx.date}</span>
-                      </td>
-                      <td className="py-2">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                          tx.type === 'Інвестиція' 
-                            ? 'bg-amber-100 text-amber-900 border border-amber-300' 
-                            : tx.type === 'Дохід' 
-                              ? 'bg-emerald-50 text-emerald-700' 
-                              : 'bg-rose-50 text-rose-700'
+                  filteredTransactions.map(tx => {
+                    const amountUsd = tx.amountUsd !== undefined ? tx.amountUsd : (tx.amount / usdRate).toFixed(2);
+                    return (
+                      <tr key={tx.id} className="hover:bg-slate-50/70 transition group">
+                        <td className="py-2 text-slate-500 text-[10px]">
+                          <span className="flex items-center gap-1"><Calendar size={11} /> {tx.date}</span>
+                        </td>
+                        <td className="py-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                            tx.type === 'Інвестиція' 
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                              : tx.type === 'Дохід' 
+                                ? 'bg-emerald-50 text-emerald-700' 
+                                : 'bg-rose-50 text-rose-700'
+                          }`}>
+                            {tx.type}
+                          </span>
+                        </td>
+                        <td className="py-2 font-semibold text-slate-900">{tx.category}</td>
+                        <td className="py-2 text-slate-600 text-[11px]">{tx.comment || '—'}</td>
+                        
+                        <td className={`py-2 font-bold text-xs ${
+                          tx.type === 'Інвестиція' ? 'text-amber-700' : tx.type === 'Дохід' ? 'text-emerald-600' : 'text-rose-600'
                         }`}>
-                          {tx.type}
-                        </span>
-                      </td>
-                      <td className="py-2 font-semibold text-slate-900">{tx.category}</td>
-                      <td className="py-2 text-slate-600 text-[11px]">{tx.comment || '—'}</td>
-                      
-                      <td className={`py-2 font-bold text-xs ${
-                        tx.type === 'Інвестиція' ? 'text-amber-700' : tx.type === 'Дохід' ? 'text-emerald-600' : 'text-rose-600'
-                      }`}>
-                        {editingTxId === tx.id ? (
-                          <div className="flex items-center gap-1">
-                            <input 
-                              type="number" 
-                              step="any"
-                              value={editingAmount}
-                              onChange={(e) => setEditingAmount(e.target.value)}
-                              className="w-20 px-1.5 py-1 border border-slate-300 rounded text-slate-900 font-normal focus:outline-none bg-white text-[11px]"
-                              autoFocus
-                            />
-                            <button type="button" onClick={() => handleSaveEditedAmount(tx)} className="p-1 bg-emerald-100 text-emerald-700 rounded"><Check size={12} /></button>
-                            <button type="button" onClick={() => setEditingTxId(null)} className="p-1 bg-slate-100 text-slate-600 rounded"><X size={12} /></button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 group/edit">
-                            <span>{tx.type === 'Витрата' ? '-' : '+'}{Number(tx.amount).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</span>
-                            {!String(tx.id).startsWith('stock-') && (
-                              <button 
-                                type="button"
-                                onClick={() => { setEditingTxId(tx.id); setEditingAmount(tx.amount || ''); }}
-                                className="opacity-0 group-hover/edit:opacity-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
-                                title="Редагувати суму"
-                              >
-                                <Edit2 size={11} />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      
-                      <td className="py-2 text-right">
-                        {!tx.isAuto && (
-                          <button 
-                            type="button"
-                            onClick={() => handleDeleteTransaction(tx.id)}
-                            className="text-rose-400 hover:text-rose-600 p-1 cursor-pointer transition"
-                            title="Видалити"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                          {editingTxId === tx.id ? (
+                            <div className="flex items-center gap-1">
+                              <input 
+                                type="number" 
+                                step="any"
+                                value={editingAmount}
+                                onChange={(e) => setEditingAmount(e.target.value)}
+                                className="w-20 px-1.5 py-1 border border-slate-300 rounded text-slate-900 font-normal focus:outline-none bg-white text-[11px]"
+                                autoFocus
+                              />
+                              <button type="button" onClick={() => handleSaveEditedAmount(tx)} className="p-1 bg-emerald-100 text-emerald-700 rounded"><Check size={12} /></button>
+                              <button type="button" onClick={() => setEditingTxId(null)} className="p-1 bg-slate-100 text-slate-600 rounded"><X size={12} /></button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 group/edit">
+                              <span>
+                                {tx.type === 'Витрата' ? '-' : '+'}{Number(tx.amount).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн{' '}
+                                <span className="text-[10px] font-normal text-slate-400">(${amountUsd})</span>
+                              </span>
+                              {!String(tx.id).startsWith('stock-') && (
+                                <button 
+                                  type="button"
+                                  onClick={() => { setEditingTxId(tx.id); setEditingAmount(tx.amount || ''); }}
+                                  className="opacity-0 group-hover/edit:opacity-100 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                                  title="Редагувати суму"
+                                >
+                                  <Edit2 size={11} />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        
+                        <td className="py-2 text-right">
+                          {!tx.isAuto && (
+                            <button 
+                              type="button"
+                              onClick={() => handleDeleteTransaction(tx.id)}
+                              className="text-rose-400 hover:text-rose-600 p-1 cursor-pointer transition"
+                              title="Видалити"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         </div>
       ) : (
-        /* ВИГЛЯД: ГРАФІК / АНАЛІТИКА */
         <div className="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-4">
           <h3 className="text-sm font-bold text-slate-900">Візуальний аналіз фінансів за обраний період</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200 space-y-1">
               <span className="text-xs font-semibold text-emerald-800">Доходи</span>
-              <div className="text-xl font-black text-emerald-950">{totalIncome.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн</div>
-              <div className="w-full bg-emerald-200 h-2 rounded-full overflow-hidden mt-2">
-                <div className="bg-emerald-600 h-full" style={{ width: '100%' }}></div>
+              <div className="text-xl font-black text-emerald-950">
+                {totalIncome.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн{' '}
+                <span className="text-xs font-normal text-slate-500">(${(totalIncome / usdRate).toFixed(2)})</span>
               </div>
             </div>
 
             <div className="bg-rose-50/60 p-4 rounded-xl border border-rose-200 space-y-1">
               <span className="text-xs font-semibold text-rose-800">Витрати</span>
-              <div className="text-xl font-black text-rose-950">{totalExpense.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн</div>
-              <div className="w-full bg-rose-200 h-2 rounded-full overflow-hidden mt-2">
-                <div className="bg-rose-600 h-full" style={{ width: totalIncome > 0 ? `${Math.min(100, (totalExpense / totalIncome) * 100)}%` : '0%' }}></div>
+              <div className="text-xl font-black text-rose-950">
+                {totalExpense.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн{' '}
+                <span className="text-xs font-normal text-slate-500">(${(totalExpense / usdRate).toFixed(2)})</span>
               </div>
             </div>
 
             <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-200 space-y-1">
               <span className="text-xs font-semibold text-indigo-800">Чистий прибуток</span>
-              <div className="text-xl font-black text-indigo-950">{netProfit.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн</div>
-              <div className="w-full bg-indigo-200 h-2 rounded-full overflow-hidden mt-2">
-                <div className="bg-indigo-600 h-full" style={{ width: netProfit > 0 ? '100%' : '0%' }}></div>
+              <div className="text-xl font-black text-indigo-950">
+                {netProfit.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн{' '}
+                <span className="text-xs font-normal text-slate-500">(${(netProfit / usdRate).toFixed(2)})</span>
               </div>
             </div>
           </div>
-          <p className="text-xs text-slate-400 text-center">Ви можете перемикатися на вкладку «Таблиця», щоб редагувати конкретні транзакції.</p>
         </div>
       )}
 
-      {/* МОДАЛЬНЕ ВІКНО ІНВЕСТОРІВ */}
       {showInvestmentsModal && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
@@ -975,7 +1038,7 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
             <div className="space-y-3">
               {investorsData.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-xs">
-                  Жодного інвестора ще не заведено. Оберіть тип «Інвестиція» при додаванні транзакції.
+                  Жодного інвестора ще не заведено.
                 </div>
               ) : (
                 investorsData.map(inv => (
@@ -985,20 +1048,20 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                         <UserCheck size={16} className="text-amber-700" /> {inv.name}
                       </span>
                       <span className="text-xs font-black text-amber-900 bg-amber-200/50 px-2.5 py-0.5 rounded-full">
-                        Внесено: {inv.totalInvested.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн
+                        Внесено: {inv.totalInvested.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 space-y-0.5">
                         <span className="text-[10px] text-slate-500 font-semibold block">Повернуто інвестору:</span>
-                        <span className="text-sm font-bold text-emerald-600">{inv.returned.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</span>
+                        <span className="text-sm font-bold text-emerald-600">{inv.returned.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн</span>
                       </div>
 
                       <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 space-y-0.5">
                         <span className="text-[10px] text-slate-500 font-semibold block">Залишок до повернення:</span>
                         <span className={`text-sm font-bold ${inv.debtRemaining > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                          {inv.debtRemaining.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн
+                          {inv.debtRemaining.toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн
                         </span>
                       </div>
                     </div>
@@ -1010,7 +1073,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       )}
 
-      {/* МОДАЛЬНЕ ВІКНО ДЕТАЛЕЙ КАТЕГОРІЇ */}
       {selectedCategoryAnalytics && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
@@ -1039,7 +1101,10 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
                       <div className="font-bold text-slate-900">{t.comment}</div>
                       <div className="text-[10px] text-slate-400">{t.date}</div>
                     </div>
-                    <div className="font-extrabold text-slate-900">{Number(t.amount).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн</div>
+                    <div className="font-extrabold text-slate-900">
+                      {Number(t.amount).toLocaleString('uk-UA', { minimumFractionDigits: 2 })} грн{' '}
+                      <span className="text-slate-400 font-normal">(${(t.amount / usdRate).toFixed(2)})</span>
+                    </div>
                   </div>
                 ))
               )}
@@ -1048,7 +1113,6 @@ export default function Finances({ finances = [], setFinances = () => {} }) {
         </div>
       )}
 
-      {/* МОДАЛЬНЕ ВІКНО СТВОРЕННЯ ТРАНЗАКЦІЇ (З ПОДАТКАМИ, БУХГАЛТЕРОМ, ЗАРПЛАТНЕЮ ТА ВАЛЮТОЮ) */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">

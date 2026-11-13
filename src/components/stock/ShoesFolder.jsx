@@ -11,14 +11,16 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
 
   const [formName, setFormName] = useState('');
   const [formPrice, setFormPrice] = useState('');
-  const [formCost, setFormCost] = useState('');
+  const [formCost, setFormCost] = useState(''); // Тепер закупка в доларах ($)
   
-  // Виробники у вигляді масиву (чекбокси)
   const [formSuppliers, setFormSuppliers] = useState(['Міла']);
   const [formImage, setFormImage] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSupplierFilter, setSelectedSupplierFilter] = useState('усі');
+
+  // Актуальний курс продажу за замовчуванням (або можна підтягувати з налаштувань)
+  const currentUsdRate = 46.36;
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
@@ -35,9 +37,9 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
     setEditingItem(item);
     setFormName(item.name || '');
     setFormPrice(item.price !== undefined ? item.price : '');
+    // Якщо у базі закупка була в грн (зі старих записів), можна орієнтовно перевести або взяти як є, якщо вже в баксах
     setFormCost(item.cost !== undefined ? item.cost : '');
     
-    // Підтримка як старого поля supplier, так і нового масиву suppliers
     let initialSuppliers = ['Міла'];
     if (Array.isArray(item.suppliers)) {
       initialSuppliers = item.suppliers;
@@ -52,7 +54,6 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
   const handleSupplierToggle = (supplierName) => {
     setFormSuppliers(prev => {
       if (prev.includes(supplierName)) {
-        // Залишаємо хоча б одного виробника, щоб не було пустого масиву
         if (prev.length === 1) return prev;
         return prev.filter(s => s !== supplierName);
       } else {
@@ -113,9 +114,10 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
       folderId: 'shoes',
       name: formName,
       price: formPrice !== '' ? Number(formPrice) : '',
-      cost: formCost !== '' ? Number(formCost) : '',
+      cost: formCost !== '' ? Number(formCost, 10) : '', // Закупка в USD
+      currency: 'USD', // Фіксуємо, що закупка у валюті
       suppliers: formSuppliers,
-      supplier: formSuppliers[0] || 'Міла', // Для зворотної сумісності
+      supplier: formSuppliers[0] || 'Міла',
       image: formImage
     };
 
@@ -195,11 +197,17 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {filteredShoes.map(item => {
             const itemSuppliers = Array.isArray(item.suppliers) ? item.suppliers : [item.supplier || 'Міла'];
+            const costUsd = item.cost !== '' ? Number(item.cost) : 0;
+            const costUah = Math.round(costUsd * currentUsdRate);
 
             return (
               <div 
                 key={item.id} 
-                onClick={() => onSelectDetails && onSelectDetails(item)}
+                onClick={() => onSelectDetails && onSelectDetails({
+                  ...item,
+                  // Передаємо відформатовану закупку для модалки деталей
+                  costDisplay: costUsd > 0 ? `$${costUsd} (~${costUah} грн)` : '-'
+                })}
                 className="p-3 bg-white hover:bg-slate-50 cursor-pointer rounded-2xl border border-slate-100 flex items-center justify-between gap-3 transition shadow-xs"
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -215,6 +223,7 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
                     <strong className="text-slate-900 text-xs truncate">{item.name}</strong>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       {item.price !== '' && <span className="text-xs font-bold text-emerald-700 mr-1">{item.price} грн</span>}
+                      {costUsd > 0 && <span className="text-[11px] font-semibold text-slate-600">Зак: ${costUsd}</span>}
                       {itemSuppliers.map(sup => (
                         <span key={sup} className="bg-indigo-50 text-indigo-800 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-indigo-100">
                           {sup}
@@ -273,11 +282,11 @@ export default function ShoesFolder({ stock = [], onAddItem = () => {}, onDelete
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-medium text-slate-600 mb-1">Ціна продажу (грн)</label>
-                  <input type="number" value={formPrice} onChange={e => setFormPrice(e.target.value)} className="w-full px-3 py-2 border rounded-xl" placeholder="0" />
+                  <input type="number" step="any" value={formPrice} onChange={e => setFormPrice(e.target.value)} className="w-full px-3 py-2 border rounded-xl" placeholder="0" />
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-600 mb-1">Закупка (грн)</label>
-                  <input type="number" value={formCost} onChange={e => setFormCost(e.target.value)} className="w-full px-3 py-2 border rounded-xl" placeholder="0" />
+                  <label className="block font-medium text-slate-600 mb-1">Закупка ($)</label>
+                  <input type="number" step="any" value={formCost} onChange={e => setFormCost(e.target.value)} className="w-full px-3 py-2 border rounded-xl font-bold text-emerald-800" placeholder="0 $" />
                 </div>
               </div>
 

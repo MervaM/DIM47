@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Plus, Table as TableIcon, PieChart, Check, X } from 'lucide-react';
+import { Calendar, Plus, Check, X } from 'lucide-react';
 
 export default function FinancesHeader({
   usdRate,
@@ -10,30 +10,28 @@ export default function FinancesHeader({
   handleSaveUsdRate,
   periodFilter,
   setPeriodFilter,
-  selectedMonth,
-  setSelectedMonth,
+  selectedDay,
+  setSelectedDay,
   selectedWeek,
   setSelectedWeek,
-  viewMode,
-  setViewMode,
+  selectedMonth,
+  setSelectedMonth,
+  startDate,
+  setStartDate,
+  endDate,
+  setEndDate,
   setShowAddModal
 }) {
   return (
     <div className="space-y-3">
-      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/85 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-        {/* Курс НБУ */}
-        <div className="flex items-center gap-2 bg-emerald-50/60 px-3 py-1.5 rounded-xl border border-emerald-200 text-xs">
-          <span className="font-bold text-emerald-900">Курс USD (НБУ):</span>
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        {/* Курс продажу */}
+        <div className="flex items-center gap-2 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 text-xs">
+          <span className="font-bold text-emerald-900">Курс продажу USD:</span>
           {!isEditingUsd ? (
             <div className="flex items-center gap-2">
-              <span className="font-black text-emerald-950">{usdRate} грн/$</span>
-              <button 
-                type="button"
-                onClick={() => setIsEditingUsd(true)}
-                className="text-[10px] text-emerald-700 underline cursor-pointer"
-              >
-                змінити вручну
-              </button>
+              <span className="font-black text-emerald-950 text-sm">{usdRate} грн/$</span>
+              <button onClick={() => setIsEditingUsd(true)} className="text-[10px] text-emerald-700 underline cursor-pointer">змінити</button>
             </div>
           ) : (
             <div className="flex items-center gap-1">
@@ -45,36 +43,39 @@ export default function FinancesHeader({
                 className="w-16 px-1.5 py-0.5 bg-white border border-emerald-300 rounded text-xs"
                 autoFocus
               />
-              <button type="button" onClick={handleSaveUsdRate} className="p-1 bg-emerald-600 text-white rounded"><Check size={12} /></button>
-              <button type="button" onClick={() => setIsEditingUsd(false)} className="p-1 bg-slate-200 text-slate-700 rounded"><X size={12} /></button>
+              <button onClick={handleSaveUsdRate} className="p-1 bg-emerald-600 text-white rounded"><Check size={12} /></button>
+              <button onClick={() => setIsEditingUsd(false)} className="p-1 bg-slate-200 rounded"><X size={12} /></button>
             </div>
           )}
         </div>
 
         {/* Фільтри періодів */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-            <Calendar size={14} /> Період:
-          </span>
-          {['all', 'month', 'week'].map(f => (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-bold text-slate-500 flex items-center gap-1"><Calendar size={14} /> Період:</span>
+          {[
+            { id: 'all', name: 'Увесь час' },
+            { id: 'day', name: 'День' },
+            { id: 'week', name: 'Тиждень' },
+            { id: 'month', name: 'Місяць' },
+            { id: 'custom', name: 'Свій діапазон' }
+          ].map(f => (
             <button
-              key={f}
-              type="button"
-              onClick={() => setPeriodFilter(f)}
-              className={`px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                periodFilter === f ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              key={f.id}
+              onClick={() => setPeriodFilter(f.id)}
+              className={`px-3 py-1 rounded-xl font-semibold transition cursor-pointer ${
+                periodFilter === f.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              {f === 'all' ? 'Увесь час' : f === 'month' ? 'Місяць' : 'Тиждень'}
+              {f.name}
             </button>
           ))}
 
-          {periodFilter === 'month' && (
+          {periodFilter === 'day' && (
             <input 
-              type="month"
-              value={selectedMonth}
-              onChange={e => setSelectedMonth(e.target.value)}
-              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+              type="date"
+              value={selectedDay}
+              onChange={e => setSelectedDay(e.target.value)}
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-xs"
             />
           )}
 
@@ -83,39 +84,43 @@ export default function FinancesHeader({
               type="week"
               value={selectedWeek}
               onChange={e => setSelectedWeek(e.target.value)}
-              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-xs"
             />
           )}
-        </div>
 
-        {/* Таблиця / Графік */}
-        <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
-          <button
-            type="button"
-            onClick={() => setViewMode('table')}
-            className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
-              viewMode === 'table' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <TableIcon size={14} /> Таблиця
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('chart')}
-            className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
-              viewMode === 'chart' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <PieChart size={14} /> Графік
-          </button>
+          {periodFilter === 'month' && (
+            <input 
+              type="month"
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-xs"
+            />
+          )}
+
+          {periodFilter === 'custom' && (
+            <div className="flex items-center gap-1">
+              <input 
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+              />
+              <span>—</span>
+              <input 
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+              />
+            </div>
+          )}
         </div>
       </div>
 
       <div className="flex justify-end">
         <button 
-          type="button"
           onClick={() => setShowAddModal(true)}
-          className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs cursor-pointer transition"
+          className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm"
         >
           <Plus size={16} /> Додати транзакцію
         </button>

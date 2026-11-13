@@ -13,9 +13,10 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   
   const [selectedItemDetails, setSelectedItemDetails] = useState(null);
   
-  // Стани для редагування кількості по виробниках
+  // Стани для редагування кількості (тепер включає і загальну кількість)
   const [editingSupplierItemId, setEditingSupplierItemId] = useState(null);
   const [tempSuppliers, setTempSuppliers] = useState({});
+  const [tempTotal, setTempTotal] = useState('');
   
   // Стани для списання та історії списань
   const [writeOffModalItem, setWriteOffModalItem] = useState(null);
@@ -64,18 +65,23 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   };
 
   const handleSaveSuppliers = (item) => {
+    const myStockVal = Number(tempSuppliers['Основний склад'] ?? (item.suppliers?.['Основний склад'] || 0));
+    const milaVal = Number(tempSuppliers['Міла'] ?? (item.suppliers?.['Міла'] || 0));
+    const valeriyVal = Number(tempSuppliers['Валерій'] ?? (item.suppliers?.['Валерій'] || 0));
+
     const updatedSuppliers = {
       ...(item.suppliers || {}),
-      'Основний склад': Number(tempSuppliers['Основний склад'] ?? (item.suppliers?.['Основний склад'] || 0)),
-      'Міла': Number(tempSuppliers['Міла'] ?? (item.suppliers?.['Міла'] || 0)),
-      'Валерій': Number(tempSuppliers['Валерій'] ?? (item.suppliers?.['Валерій'] || 0)),
+      'Основний склад': myStockVal,
+      'Міла': milaVal,
+      'Валерій': valeriyVal,
     };
 
-    const newTotal = Object.values(updatedSuppliers).reduce((a, b) => a + Number(b || 0), 0);
+    // Якщо загальна кількість була змінена вручну — беремо її, інакше рахуємо суму
+    const finalTotal = tempTotal !== '' ? Number(tempTotal) : (myStockVal + milaVal + valeriyVal);
 
     const updatedItem = {
       ...item,
-      quantity: newTotal,
+      quantity: finalTotal,
       suppliers: updatedSuppliers
     };
 
@@ -105,7 +111,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       [writeOffTarget]: currentTargetVal - qty
     };
 
-    const newTotal = Object.values(updatedSuppliers).reduce((a, b) => a + Number(b || 0), 0);
+    const newTotal = Math.max(0, (writeOffModalItem.quantity || 0) - qty);
 
     const updatedItem = {
       ...writeOffModalItem,
@@ -115,7 +121,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
 
     handleAddItemWrapper(updatedItem);
 
-    // Додаємо запис в історію списань
     const itemName = writeOffModalItem.folderId === 'boxes' 
       ? `Коробки (${writeOffModalItem.sizeBox || 'Великі'})` 
       : (writeOffModalItem.name || 'Пильовик');
@@ -154,6 +159,144 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     }
   };
 
+  const renderCard = (item, isBox = true) => {
+    const displayName = isBox 
+      ? `Коробки (${item.sizeBox || 'Великі'})` 
+      : ((!item.name || item.name === 'Товар') ? `Пильовик (${item.sizeBox || 'Великі'})` : item.name);
+
+    const total = item.quantity || 0;
+    const mila = item.suppliers?.['Міла'] || 0;
+    const valeriy = item.suppliers?.['Валерій'] || 0;
+    const myStock = item.suppliers?.['Основний склад'] !== undefined 
+      ? item.suppliers['Основний склад'] 
+      : Math.max(0, total - mila - valeriy);
+
+    const isEditing = editingSupplierItemId === item.id;
+
+    return (
+      <div key={item.id} className="flex flex-col justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-xs">
+        <div className="flex items-start gap-3">
+          {item.image ? (
+            <img src={item.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
+          ) : (
+            <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center text-xs text-slate-500 flex-shrink-0">
+              {isBox ? 'Фото' : '🛍️'}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-between items-center">
+              <div className="font-bold text-slate-900 text-sm truncate">{displayName}</div>
+              <button 
+                onClick={() => {
+                  setWriteOffModalItem(item);
+                  setWriteOffAmount('');
+                }}
+                className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer flex items-center gap-0.5 text-[10px] font-bold"
+              >
+                <MinusCircle size={14} /> Списати
+              </button>
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              Загальна кількість: <span className="font-extrabold text-slate-900">{total} шт</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 pt-3 border-t border-slate-200/60 text-xs">
+          {!isEditing ? (
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-slate-700">
+                <span>Мій склад:</span>
+                <span className="font-bold text-slate-900">{myStock} шт</span>
+              </div>
+              <div className="flex justify-between items-center text-indigo-900">
+                <span>Міла:</span>
+                <span className="font-bold">{mila} шт</span>
+              </div>
+              <div className="flex justify-between items-center text-purple-900">
+                <span>Валерій:</span>
+                <span className="font-bold">{valeriy} шт</span>
+              </div>
+              <div className="flex justify-end pt-1">
+                <button 
+                  onClick={() => {
+                    setEditingSupplierItemId(item.id);
+                    setTempTotal(total);
+                    setTempSuppliers({
+                      'Основний склад': myStock,
+                      'Міла': mila,
+                      'Валерій': valeriy
+                    });
+                  }}
+                  className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                >
+                  <Edit3 size={12} /> Змінити кількість вручну
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2 bg-white p-2.5 rounded-xl border border-indigo-100">
+              <div className="text-[11px] font-bold text-slate-700 mb-1">Редагування кількості:</div>
+              
+              {/* Поле для редагування загальної кількості */}
+              <div className="flex justify-between items-center gap-2 pb-1.5 border-b border-slate-100">
+                <span className="text-slate-900 font-bold text-[11px]">Загальна кількість:</span>
+                <input 
+                  type="number"
+                  value={tempTotal}
+                  onChange={e => setTempTotal(e.target.value)}
+                  className="w-20 px-2 py-1 border border-slate-300 rounded text-right font-black text-xs bg-slate-50"
+                />
+              </div>
+
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-slate-600 text-[11px]">Мій склад:</span>
+                <input 
+                  type="number"
+                  value={tempSuppliers['Основний склад'] ?? myStock}
+                  onChange={e => setTempSuppliers(prev => ({ ...prev, 'Основний склад': e.target.value }))}
+                  className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
+                />
+              </div>
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-indigo-900 text-[11px]">Міла:</span>
+                <input 
+                  type="number"
+                  value={tempSuppliers['Міла'] ?? mila}
+                  onChange={e => setTempSuppliers(prev => ({ ...prev, 'Міла': e.target.value }))}
+                  className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
+                />
+              </div>
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-purple-900 text-[11px]">Валерій:</span>
+                <input 
+                  type="number"
+                  value={tempSuppliers['Валерій'] ?? valeriy}
+                  onChange={e => setTempSuppliers(prev => ({ ...prev, 'Валерій': e.target.value }))}
+                  className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
+                />
+              </div>
+              <div className="flex justify-end gap-1.5 pt-1">
+                <button 
+                  onClick={() => setEditingSupplierItemId(null)}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold cursor-pointer"
+                >
+                  Скасувати
+                </button>
+                <button 
+                  onClick={() => handleSaveSuppliers(item)}
+                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-semibold cursor-pointer flex items-center gap-1"
+                >
+                  <Check size={12} /> Зберегти
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div 
       className="space-y-6 max-w-4xl mx-auto p-4 sm:p-0 select-none"
@@ -179,247 +322,8 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
             <h3 className="text-lg font-bold text-slate-900 text-center sm:text-left">Загальний перегляд складу</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {boxesList.map(item => {
-                const total = item.quantity || 0;
-                const mila = item.suppliers?.['Міла'] || 0;
-                const valeriy = item.suppliers?.['Валерій'] || 0;
-                const myStock = item.suppliers?.['Основний склад'] !== undefined 
-                  ? item.suppliers['Основний склад'] 
-                  : Math.max(0, total - mila - valeriy);
-
-                const isEditing = editingSupplierItemId === item.id;
-
-                return (
-                  <div key={item.id} className="flex flex-col justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-xs">
-                    <div className="flex items-start gap-3">
-                      {item.image ? (
-                        <img src={item.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
-                      ) : (
-                        <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center text-[10px] text-slate-500 flex-shrink-0">Фото</div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center">
-                          <div className="font-bold text-slate-900 text-sm truncate">Коробки ({item.sizeBox || 'Великі'})</div>
-                          <button 
-                            onClick={() => {
-                              setWriteOffModalItem(item);
-                              setWriteOffAmount('');
-                            }}
-                            className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer flex items-center gap-0.5 text-[10px] font-bold"
-                          >
-                            <MinusCircle size={14} /> Списати
-                          </button>
-                        </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          Загальна кількість: <span className="font-extrabold text-slate-900">{total} шт</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-slate-200/60 text-xs">
-                      {!isEditing ? (
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between items-center text-slate-700">
-                            <span>Мій склад:</span>
-                            <span className="font-bold text-slate-900">{myStock} шт</span>
-                          </div>
-                          <div className="flex justify-between items-center text-indigo-900">
-                            <span>Міла:</span>
-                            <span className="font-bold">{mila} шт</span>
-                          </div>
-                          <div className="flex justify-between items-center text-purple-900">
-                            <span>Валерій:</span>
-                            <span className="font-bold">{valeriy} шт</span>
-                          </div>
-                          <div className="flex justify-end pt-1">
-                            <button 
-                              onClick={() => {
-                                setEditingSupplierItemId(item.id);
-                                setTempSuppliers({
-                                  'Основний склад': myStock,
-                                  'Міла': mila,
-                                  'Валерій': valeriy
-                                });
-                              }}
-                              className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                            >
-                              <Edit3 size={12} /> Змінити кількість вручну
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 bg-white p-2.5 rounded-xl border border-indigo-100">
-                          <div className="text-[11px] font-bold text-slate-700 mb-1">Редагування кількості:</div>
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="text-slate-600 text-[11px]">Мій склад:</span>
-                            <input 
-                              type="number"
-                              value={tempSuppliers['Основний склад'] ?? myStock}
-                              onChange={e => setTempSuppliers(prev => ({ ...prev, 'Основний склад': e.target.value }))}
-                              className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
-                            />
-                          </div>
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="text-indigo-900 text-[11px]">Міла:</span>
-                            <input 
-                              type="number"
-                              value={tempSuppliers['Міла'] ?? mila}
-                              onChange={e => setTempSuppliers(prev => ({ ...prev, 'Міла': e.target.value }))}
-                              className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
-                            />
-                          </div>
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="text-purple-900 text-[11px]">Валерій:</span>
-                            <input 
-                              type="number"
-                              value={tempSuppliers['Валерій'] ?? valeriy}
-                              onChange={e => setTempSuppliers(prev => ({ ...prev, 'Валерій': e.target.value }))}
-                              className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
-                            />
-                          </div>
-                          <div className="flex justify-end gap-1.5 pt-1">
-                            <button 
-                              onClick={() => setEditingSupplierItemId(null)}
-                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold cursor-pointer"
-                            >
-                              Скасувати
-                            </button>
-                            <button 
-                              onClick={() => handleSaveSuppliers(item)}
-                              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-semibold cursor-pointer flex items-center gap-1"
-                            >
-                              <Check size={12} /> Зберегти
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {dustbagsList.map(item => {
-                const displayName = (!item.name || item.name === 'Товар') 
-                  ? `Пильовик (${item.sizeBox || 'Великі'})` 
-                  : item.name;
-
-                const total = item.quantity || 0;
-                const mila = item.suppliers?.['Міла'] || 0;
-                const valeriy = item.suppliers?.['Валерій'] || 0;
-                const myStock = item.suppliers?.['Основний склад'] !== undefined 
-                  ? item.suppliers['Основний склад'] 
-                  : Math.max(0, total - mila - valeriy);
-
-                const isEditing = editingSupplierItemId === item.id;
-
-                return (
-                  <div key={item.id} className="flex flex-col justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-xs">
-                    <div className="flex items-start gap-3">
-                      {item.image ? (
-                        <img src={item.image} alt="" className="w-12 h-12 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
-                      ) : (
-                        <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center text-lg flex-shrink-0">🛍️</div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center">
-                          <div className="font-bold text-slate-900 text-sm truncate">{displayName}</div>
-                          <button 
-                            onClick={() => {
-                              setWriteOffModalItem(item);
-                              setWriteOffAmount('');
-                            }}
-                            className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer flex items-center gap-0.5 text-[10px] font-bold"
-                          >
-                            <MinusCircle size={14} /> Списати
-                          </button>
-                        </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          Загальна кількість: <span className="font-extrabold text-slate-900">{total} шт</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-slate-200/60 text-xs">
-                      {!isEditing ? (
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between items-center text-slate-700">
-                            <span>Мій склад:</span>
-                            <span className="font-bold text-slate-900">{myStock} шт</span>
-                          </div>
-                          <div className="flex justify-between items-center text-indigo-900">
-                            <span>Міла:</span>
-                            <span className="font-bold">{mila} шт</span>
-                          </div>
-                          <div className="flex justify-between items-center text-purple-900">
-                            <span>Валерій:</span>
-                            <span className="font-bold">{valeriy} шт</span>
-                          </div>
-                          <div className="flex justify-end pt-1">
-                            <button 
-                              onClick={() => {
-                                setEditingSupplierItemId(item.id);
-                                setTempSuppliers({
-                                  'Основний склад': myStock,
-                                  'Міла': mila,
-                                  'Валерій': valeriy
-                                });
-                              }}
-                              className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                            >
-                              <Edit3 size={12} /> Змінити кількість вручну
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 bg-white p-2.5 rounded-xl border border-indigo-100">
-                          <div className="text-[11px] font-bold text-slate-700 mb-1">Редагування кількості:</div>
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="text-slate-600 text-[11px]">Мій склад:</span>
-                            <input 
-                              type="number"
-                              value={tempSuppliers['Основний склад'] ?? myStock}
-                              onChange={e => setTempSuppliers(prev => ({ ...prev, 'Основний склад': e.target.value }))}
-                              className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
-                            />
-                          </div>
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="text-indigo-900 text-[11px]">Міла:</span>
-                            <input 
-                              type="number"
-                              value={tempSuppliers['Міла'] ?? mila}
-                              onChange={e => setTempSuppliers(prev => ({ ...prev, 'Міла': e.target.value }))}
-                              className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
-                            />
-                          </div>
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="text-purple-900 text-[11px]">Валерій:</span>
-                            <input 
-                              type="number"
-                              value={tempSuppliers['Валерій'] ?? valeriy}
-                              onChange={e => setTempSuppliers(prev => ({ ...prev, 'Валерій': e.target.value }))}
-                              className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
-                            />
-                          </div>
-                          <div className="flex justify-end gap-1.5 pt-1">
-                            <button 
-                              onClick={() => setEditingSupplierItemId(null)}
-                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold cursor-pointer"
-                            >
-                              Скасувати
-                            </button>
-                            <button 
-                              onClick={() => handleSaveSuppliers(item)}
-                              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-semibold cursor-pointer flex items-center gap-1"
-                            >
-                              <Check size={12} /> Зберегти
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {boxesList.map(item => renderCard(item, true))}
+              {dustbagsList.map(item => renderCard(item, false))}
             </div>
 
             {boxesList.length === 0 && dustbagsList.length === 0 && (
@@ -600,7 +504,9 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
               )}
               <div className="flex justify-between py-1">
                 <span className="text-slate-500">Закупка:</span>
-                <span className="font-medium text-slate-700">{selectedItemDetails.cost !== '' ? `${selectedItemDetails.cost} грн` : '-'}</span>
+                <span className="font-medium text-slate-700">
+                  {selectedItemDetails.costDisplay || (selectedItemDetails.cost !== '' ? `${selectedItemDetails.cost} ${selectedItemDetails.currency === 'USD' ? '$' : 'грн'}` : '-')}
+                </span>
               </div>
             </div>
 

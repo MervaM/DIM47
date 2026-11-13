@@ -4,9 +4,10 @@ import { db } from '../../firebase';
 import { Calendar, Plus, Check, X } from 'lucide-react';
 
 export default function finances({ finances = [], setFinances = () => {} }) {
-  const [usdRate, setUsdRate] = useState(46.36); // Запасний курс, якщо API недоступне
+  const [usdRate, setUsdRate] = useState(46.36);
   const [isEditingUsd, setIsEditingUsd] = useState(false);
   const [usdInput, setUsdInput] = useState('46.36');
+  const [isManualRate, setIsManualRate] = useState(false);
 
   const [periodFilter, setPeriodFilter] = useState('all');
   const [selectedDay, setSelectedDay] = useState(new Date().toISOString().split('T')[0]);
@@ -24,52 +25,49 @@ export default function finances({ finances = [], setFinances = () => {} }) {
   const [comment, setComment] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Кеш курсів по днях, щоб не робити зайвих запитів
-  const [dailyRates, setDailyRates] = useState({});
-
   useEffect(() => {
-    fetchData();
-    fetchRateForDate(date); // Отримуємо курс на сьогодні при завантаженні
+    initData();
   }, []);
 
-  // Функція для отримання точного курсу НБУ на конкретну дату (формат YYYY-MM-DD)
-  const fetchRateForDate = async (targetDate) => {
-    if (dailyRates[targetDate]) {
-      setUsdRate(dailyRates[targetDate]);
-      setUsdInput(String(dailyRates[targetDate]));
-      return;
-    }
-
-    try {
-      // Конвертуємо YYYY-MM-DD у YYYYMMDD для API НБУ
-      const formattedDate = targetDate.replaceAll('-', '');
-      const response = await fetch(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&date=${formattedDate}&json`);
-      const data = await response.json();
-      
-      if (data && data[0] && data[0].rate) {
-        const rate = Number(data[0].rate);
-        setUsdRate(rate);
-        setUsdInput(String(rate));
-        setDailyRates(prev => ({ ...prev, [targetDate]: rate }));
-      }
-    } catch (error) {
-      console.error('Не вдалося отримати курс на дату:', targetDate, error);
-    }
-  };
-
-  // Коли користувач змінює дату в модалці створення — автоматично підтягується курс на цей день
-  const handleDateChange = (newDate) => {
-    setDate(newDate);
-    fetchRateForDate(newDate);
-  };
-
-  const fetchData = async () => {
+  const initData = async () => {
+    let savedRate = null;
     try {
       const txSnap = await getDocs(collection(db, 'transactions'));
       const txList = txSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (txList.length > 0) setFinances(txList);
+
+      const settingsSnap = await getDocs(collection(db, 'settings'));
+      settingsSnap.forEach(d => {
+        if (d.id === 'usd_sell_rate' && d.data().value) {
+          savedRate = Number(d.data().value);
+          setUsdRate(savedRate);
+          setUsdInput(String(savedRate));
+          setIsManualRate(Boolean(d.data().isManual));
+        }
+      });
     } catch (e) {
       console.error('Помилка завантаження:', e);
+    }
+
+    // Якщо курс не зафіксовано вручну — підтягуємо актуальний курс продажу з ПриватБанку
+    if (!savedRate) {
+      fetchRealSellRate();
+    }
+  };
+
+  // Отримання реального готівкового курсу продажу (sale) з ПриватБанку
+  const fetchRealSellRate = async () => {
+    try {
+      const response = await fetch('https://api.privatbank.ua/p24api/pubinfo?json&exchange&coursid=5');
+      const data = await response.json();
+      const usdObj = data.find(item => item.ccy === 'USD');
+      if (usdObj && usdObj.sale) {
+        const sellRate = Number(parseFloat(usdObj.sale).toFixed(2));
+        setUsdRate(sellRate);
+        setUsdInput(String(sellRate));
+      }
+    } catch (error) {
+      console.error('Не вдалося отримати курс продажу ПриватБанку:', error);
     }
   };
 
@@ -77,7 +75,12 @@ export default function finances({ finances = [], setFinances = () => {} }) {
     const val = parseFloat(usdInput);
     if (!isNaN(val) && val > 0) {
       setUsdRate(val);
-      setDailyRates(prev => ({ ...prev, [date]: val }));
+      setIsManualRate(true);
+      try {
+        await setDoc(doc(db, 'settings', 'usd_sell_rate'), { value: val, isManual: true });
+      } catch (e) {
+        console.error(e);
+      }
     }
     setIsEditingUsd(false);
   };
@@ -115,12 +118,9 @@ export default function finances({ finances = [], setFinances = () => {} }) {
     let finalAmount = Number(amount);
     let commentText = comment;
 
-    // Використовуємо актуальний курс саме на обрану дату транзакції
-    const currentRate = dailyRates[date] || usdRate;
-
     if (currencyMode === 'USD') {
-      finalAmount = Number((Number(amount) * currentRate).toFixed(2));
-      commentText = `[ USD: $${amount} за курсом на ${date}: ${currentRate} ] ${comment}`;
+      finalAmount = Number((Number(amount) * usdRate).toFixed(2));
+      commentText = `[ USD: $${amount} за курсом продажу ${usdRate} ] ${comment}`;
     }
 
     const newTx = {
@@ -128,7 +128,7 @@ export default function finances({ finances = [], setFinances = () => {} }) {
       type,
       category,
       amount: finalAmount,
-      rateUsed: currentRate,
+      rateUsed: usdRate,
       comment: commentText,
       createdAt: new Date().toISOString()
     };
@@ -146,14 +146,23 @@ export default function finances({ finances = [], setFinances = () => {} }) {
 
   return (
     <div className="space-y-4 p-4 max-w-5xl mx-auto">
-      {/* Верхня панель */}
+      {/* Верхня панель: курс продажу та фільтри */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-2 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 text-xs">
-          <span className="font-bold text-emerald-900">Курс USD на {date}:</span>
+          <span className="font-bold text-emerald-900">Курс продажу USD:</span>
           {!isEditingUsd ? (
             <div className="flex items-center gap-2">
               <span className="font-black text-emerald-950 text-sm">{usdRate} грн/$</span>
               <button onClick={() => setIsEditingUsd(true)} className="text-[10px] text-emerald-700 underline cursor-pointer">змінити</button>
+              {isManualRate && (
+                <button
+                  onClick={fetchRealSellRate}
+                  title="Підтягнути курс продажу банку"
+                  className="text-[10px] text-slate-500 underline cursor-pointer ml-1"
+                >
+                  курс банку
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-1">
@@ -165,8 +174,8 @@ export default function finances({ finances = [], setFinances = () => {} }) {
                 className="w-16 px-1.5 py-0.5 bg-white border border-emerald-300 rounded text-xs"
                 autoFocus
               />
-              <button onClick={handleSaveUsdRate} className="p-1 bg-emerald-600 text-white rounded"><Check size={12} /></button>
-              <button onClick={() => setIsEditingUsd(false)} className="p-1 bg-slate-200 rounded"><X size={12} /></button>
+              <button onClick={handleSaveUsdRate} className="p-1 bg-emerald-600 text-white rounded cursor-pointer"><Check size={12} /></button>
+              <button onClick={() => setIsEditingUsd(false)} className="p-1 bg-slate-200 rounded cursor-pointer"><X size={12} /></button>
             </div>
           )}
         </div>
@@ -199,6 +208,13 @@ export default function finances({ finances = [], setFinances = () => {} }) {
           )}
           {periodFilter === 'month' && (
             <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-xs" />
+          )}
+          {periodFilter === 'custom' && (
+            <div className="flex items-center gap-1">
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+              <span>—</span>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs" />
+            </div>
           )}
         </div>
       </div>
@@ -242,7 +258,7 @@ export default function finances({ finances = [], setFinances = () => {} }) {
                     <td className="py-2.5 text-slate-600">{tx.comment || '—'}</td>
                     <td className={`py-2.5 font-bold ${tx.type === 'Дохід' ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {tx.type === 'Витрата' ? '-' : '+'}{Number(tx.amount).toLocaleString('uk-UA')} грн 
-                      <span className="text-[10px] text-slate-400 font-normal ml-1">(${(tx.amount / usdRate).toFixed(2)})</span>
+                      <span className="text-[10px] text-slate-400 font-normal ml-1">(${(tx.amount / (tx.rateUsed || usdRate)).toFixed(2)})</span>
                     </td>
                   </tr>
                 ))
@@ -271,16 +287,17 @@ export default function finances({ finances = [], setFinances = () => {} }) {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="font-medium text-slate-600">Дата</label>
-                  </div>
-                  {/* При зміні дати автоматично підтягується курс на цей день */}
-                  <input type="date" value={date} onChange={e => handleDateChange(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl" />
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="font-medium text-slate-600">Сума ($)</label>
+                    <label className="font-medium text-slate-600">Сума</label>
+                    <div className="flex gap-1 text-[10px]">
+                      <button type="button" onClick={() => setCurrencyMode('UAH')} className={`px-1.5 py-0.5 rounded ${currencyMode === 'UAH' ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>грн</button>
+                      <button type="button" onClick={() => setCurrencyMode('USD')} className={`px-1.5 py-0.5 rounded ${currencyMode === 'USD' ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>$</button>
+                    </div>
                   </div>
                   <input type="number" step="any" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold" placeholder="0" />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-600 mb-1">Дата</label>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl" />
                 </div>
               </div>
               <div>

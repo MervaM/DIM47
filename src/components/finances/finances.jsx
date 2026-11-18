@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Calendar, Plus, Check, X } from 'lucide-react';
+import MilaCard from './MilaCard';
 
 export default function finances({ finances = [], setFinances = () => {} }) {
+  const [orders, setOrders] = useState([]);
+
   const [usdRate, setUsdRate] = useState(46.36);
   const [isEditingUsd, setIsEditingUsd] = useState(false);
   const [usdInput, setUsdInput] = useState('46.36');
@@ -36,6 +39,9 @@ export default function finances({ finances = [], setFinances = () => {} }) {
       const txList = txSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (txList.length > 0) setFinances(txList);
 
+      const ordersSnap = await getDocs(collection(db, 'orders'));
+      setOrders(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
       const settingsSnap = await getDocs(collection(db, 'settings'));
       settingsSnap.forEach(d => {
         if (d.id === 'usd_sell_rate' && d.data().value) {
@@ -49,13 +55,11 @@ export default function finances({ finances = [], setFinances = () => {} }) {
       console.error('Помилка завантаження:', e);
     }
 
-    // Якщо курс не зафіксовано вручну — підтягуємо актуальний курс продажу з ПриватБанку
     if (!savedRate) {
       fetchRealSellRate();
     }
   };
 
-  // Отримання реального готівкового курсу продажу (sale) з ПриватБанку
   const fetchRealSellRate = async () => {
     try {
       const response = await fetch('https://api.privatbank.ua/p24api/pubinfo?json&exchange&coursid=5');
@@ -217,6 +221,11 @@ export default function finances({ finances = [], setFinances = () => {} }) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Блок виробника: Міла */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <MilaCard orders={orders} usdRate={usdRate} />
       </div>
 
       <div className="flex justify-end">

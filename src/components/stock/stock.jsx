@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, Trash2, Edit3, Check, MinusCircle } from 'lucide-react';
+import { Search, X, Trash2, Edit3, Check, MinusCircle, Send, Clock } from 'lucide-react';
+import { collection, getDocs } from "firebase/firestore";
+import { db } from '../../firebase';
 import ShoesFolder from './ShoesFolder';
 import BoxesFolder from './BoxesFolder';
 import PalettesFolder from './PalettesFolder';
@@ -13,17 +15,154 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   
   const [selectedItemDetails, setSelectedItemDetails] = useState(null);
   
-  // Стани для редагування кількості (тепер включає і загальну кількість)
+  // Стани для редагування кількості
   const [editingSupplierItemId, setEditingSupplierItemId] = useState(null);
   const [tempSuppliers, setTempSuppliers] = useState({});
   const [tempTotal, setTempTotal] = useState('');
   
-  // Стани для списання та історії списань
+  // Модалка списання пошкоджених
   const [writeOffModalItem, setWriteOffModalItem] = useState(null);
   const [writeOffAmount, setWriteOffAmount] = useState('');
   const [writeOffTarget, setWriteOffTarget] = useState('Основний склад');
-  const [writeOffReason, setWriteOffReason] = useState('Пошкоджені коробки');
-  const [writeOffsHistory, setWriteOffsHistory] = useState([]);
+  const [writeOffReason, setWriteOffReason] = useState('Пошкоджені коробки/пильовики');
+
+  // Модалка: Відправка виробнику (Мілі / Валерію)
+  const [sendModalItem, setSendModalItem] = useState(null);
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendTarget, setSendTarget] = useState('Міла');
+  const [sendDateTime, setSendDateTime] = useState(() => new Date().toISOString().slice(0, 16));
+
+  // Єдина історія транзакцій (списання + відправки + авто-списання по замовленнях)
+  const [historyLog, setHistoryLog] = useState(() => {
+    const saved = localStorage.getItem('stock_history_log');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Завантаження замовлень з Firestore для автоматичного списання/повернень
+  useEffect(() => {
+    const fetchOrdersForStock = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "orders"));
+        const fetchedOrders = [];
+        querySnapshot.forEach((docSnap) => {
+          fetchedOrders.push({ id: docSnap.id, ...docSnap.data() });
+        });
+
+        const processedOrderIds = JSON.parse(localStorage.getItem('processed_order_ids') || '[]');
+        const newSuccessfulOrders = fetchedOrders.filter(o => o.status === 'Успішно' && !processedOrderIds.includes(o.id));
+        const returnedOrders = fetchedOrders.filter(o => o.status === 'Відмова' && !processedOrderIds.includes(o.id + '_return'));
+
+        if (newSuccessfulOrders.length > 0 || returnedOrders.length > 0) {
+          let updatedStock = [...stock];
+          let newLogEntries = [];
+          let newlyProcessedIds = [...processedOrderIds];
+
+          // 1. Успішні замовлення -> списуємо з "Основного складу"
+          newSuccessfulOrders.forEach(order => {
+            const boxIndex = updatedStock.findIndex(item => item.folderId === 'boxes');
+            if (boxIndex !== -1) {
+              const currentBox = updatedStock[boxIndex];
+              const currentSuppliers = currentBox.suppliers || { 'Основний склад': currentBox.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+              const myStock = currentSuppliers['Основний склад'] || 0;
+              
+              if (myStock > 0) {
+                currentSuppliers['Основний склад'] = Math.max(0, myStock - 1);
+                currentBox.quantity = Math.max(0, (currentBox.quantity || 0) - 1);
+                currentBox.suppliers = currentSuppliers;
+                
+                newLogEntries.push({
+                  id: Date.now() + Math.random(),
+                  type: 'auto_write_off',
+                  itemName: `Коробка (успішне замовлення #${order.clientName || order.id.slice(0,5)})`,
+                  target: 'Основний склад',
+                  quantity: 1,
+                  reason: 'Автосписання по виконаному замовленню',
+                  date: new Date().toLocaleString()
+                });
+              }
+            }
+
+            const dustbagIndex = updatedStock.findIndex(item => item.folderId === 'dustbags');
+            if (dustbagIndex !== -1) {
+              const currentDb = updatedStock[dustbagIndex];
+              const currentSuppliers = currentDb.suppliers || { 'Основний склад': currentDb.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+              const myStock = currentSuppliers['Основний склад'] || 0;
+              
+              if (myStock > 0) {
+                currentSuppliers['Основний склад'] = Math.max(0, myStock - 1);
+                currentDb.quantity = Math.max(0, (currentDb.quantity || 0) - 1);
+                currentDb.suppliers = currentSuppliers;
+                
+                newLogEntries.push({
+                  id: Date.now() + Math.random(),
+                  type: 'auto_write_off',
+                  itemName: `Пильовик (успішне замовлення #${order.clientName || order.id.slice(0,5)})`,
+                  target: 'Основний склад',
+                  quantity: 1,
+                  reason: 'Автосписання по виконаному замовленню',
+                  date: new Date().toLocaleString()
+                });
+              }
+            }
+
+            newlyProcessedIds.push(order.id);
+          });
+
+          // 2. Відмови (повернення) -> плюсуємо назад на "Основний склад"
+          returnedOrders.forEach(order => {
+            const boxIndex = updatedStock.findIndex(item => item.folderId === 'boxes');
+            if (boxIndex !== -1) {
+              const currentBox = updatedStock[boxIndex];
+              const currentSuppliers = currentBox.suppliers || { 'Основний склад': currentBox.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+              currentSuppliers['Основний склад'] = (currentSuppliers['Основний склад'] || 0) + 1;
+              currentBox.quantity = (currentBox.quantity || 0) + 1;
+              currentBox.suppliers = currentSuppliers;
+
+              newLogEntries.push({
+                id: Date.now() + Math.random(),
+                type: 'return',
+                itemName: `Коробка (повернення від клієнта)`,
+                target: 'Основний склад',
+                quantity: 1,
+                reason: 'Повернення (плюс на склад)',
+                date: new Date().toLocaleString()
+              });
+            }
+
+            const dustbagIndex = updatedStock.findIndex(item => item.folderId === 'dustbags');
+            if (dustbagIndex !== -1) {
+              const currentDb = updatedStock[dustbagIndex];
+              const currentSuppliers = currentDb.suppliers || { 'Основний склад': currentDb.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+              currentSuppliers['Основний склад'] = (currentSuppliers['Основний склад'] || 0) + 1;
+              currentDb.quantity = (currentDb.quantity || 0) + 1;
+              currentDb.suppliers = currentSuppliers;
+
+              newLogEntries.push({
+                id: Date.now() + Math.random(),
+                type: 'return',
+                itemName: `Пильовик (повернення від клієнта)`,
+                target: 'Основний склад',
+                quantity: 1,
+                reason: 'Повернення (плюс на склад)',
+                date: new Date().toLocaleString()
+              });
+            }
+
+            newlyProcessedIds.push(order.id + '_return');
+          });
+
+          if (newLogEntries.length > 0) {
+            setHistoryLog(prev => [...newLogEntries, ...prev]);
+            localStorage.setItem('processed_order_ids', JSON.stringify(newlyProcessedIds));
+          }
+        }
+      } catch (err) {
+        console.error("Помилка синхронізації замовлень зі складом:", err);
+      }
+    };
+
+    fetchOrdersForStock();
+  }, [stock]);
 
   useEffect(() => {
     if (activeFolder) {
@@ -32,6 +171,10 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       localStorage.removeItem('activeFolder');
     }
   }, [activeFolder]);
+
+  useEffect(() => {
+    localStorage.setItem('stock_history_log', JSON.stringify(historyLog));
+  }, [historyLog]);
 
   const folders = [
     { id: 'shoes', name: 'Взуття' },
@@ -76,7 +219,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       'Валерій': valeriyVal,
     };
 
-    // Якщо загальна кількість була змінена вручну — беремо її, інакше рахуємо суму
     const finalTotal = tempTotal !== '' ? Number(tempTotal) : (myStockVal + milaVal + valeriyVal);
 
     const updatedItem = {
@@ -89,6 +231,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     setEditingSupplierItemId(null);
   };
 
+  // Ручне списання пошкоджених
   const handleConfirmWriteOff = (e) => {
     e.preventDefault();
     const qty = parseInt(writeOffAmount);
@@ -127,37 +270,73 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
 
     const newRecord = {
       id: Date.now(),
+      type: 'write_off',
       itemName,
       target: writeOffTarget,
       quantity: qty,
       reason: writeOffReason || 'Пошкоджено',
-      date: new Date().toISOString().split('T')[0]
+      date: new Date().toLocaleString()
     };
 
-    setWriteOffsHistory(prev => [newRecord, ...prev]);
+    setHistoryLog(prev => [newRecord, ...prev]);
     setWriteOffModalItem(null);
     setWriteOffAmount('');
   };
 
+  // Відправка виробникам із фіксацією часу та кількості
+  const handleConfirmSendToManufacturer = (e) => {
+    e.preventDefault();
+    const qty = parseInt(sendAmount);
+    if (!sendModalItem || isNaN(qty) || qty <= 0) return;
+
+    const currentSuppliers = sendModalItem.suppliers || {
+      'Основний склад': sendModalItem.quantity || 0,
+      'Міла': 0,
+      'Валерій': 0
+    };
+
+    const myStockVal = currentSuppliers['Основний склад'] || 0;
+    if (qty > myStockVal) {
+      alert('На твоєму основному складі недостатньо штук для відправки!');
+      return;
+    }
+
+    const targetVal = currentSuppliers[sendTarget] || 0;
+
+    const updatedSuppliers = {
+      ...currentSuppliers,
+      'Основний склад': myStockVal - qty,
+      [sendTarget]: targetVal + qty
+    };
+
+    const updatedItem = {
+      ...sendModalItem,
+      suppliers: updatedSuppliers
+    };
+
+    handleAddItemWrapper(updatedItem);
+
+    const itemName = sendModalItem.folderId === 'boxes' 
+      ? `Коробки (${sendModalItem.sizeBox || 'Великі'})` 
+      : (sendModalItem.name || 'Пильовик');
+
+    const newRecord = {
+      id: Date.now(),
+      type: 'send',
+      itemName,
+      target: sendTarget,
+      quantity: qty,
+      date: sendDateTime ? sendDateTime.replace('T', ' ') : new Date().toLocaleString(),
+      reason: `Відправлено виробнику (${sendTarget})`
+    };
+
+    setHistoryLog(prev => [newRecord, ...prev]);
+    setSendModalItem(null);
+    setSendAmount('');
+  };
+
   const boxesList = stock.filter(item => item.folderId === 'boxes');
   const dustbagsList = stock.filter(item => item.folderId === 'dustbags');
-
-  const touchStartX = useRef(0);
-  const touchEndX = useRef(0);
-
-  const handleTouchStart = (e) => {
-    touchStartX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchMove = (e) => {
-    touchEndX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchEnd = () => {
-    if (touchEndX.current - touchStartX.current > 70 && activeFolder) {
-      setActiveFolder(null);
-    }
-  };
 
   const renderCard = (item, isBox = true) => {
     const displayName = isBox 
@@ -186,15 +365,29 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-center">
               <div className="font-bold text-slate-900 text-sm truncate">{displayName}</div>
-              <button 
-                onClick={() => {
-                  setWriteOffModalItem(item);
-                  setWriteOffAmount('');
-                }}
-                className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer flex items-center gap-0.5 text-[10px] font-bold"
-              >
-                <MinusCircle size={14} /> Списати
-              </button>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => {
+                    setSendModalItem(item);
+                    setSendAmount('');
+                    setSendDateTime(new Date().toISOString().slice(0, 16));
+                  }}
+                  className="p-1 text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer flex items-center gap-0.5 text-[10px] font-bold"
+                  title="Відправити виробнику"
+                >
+                  <Send size={13} /> Віддати
+                </button>
+                <button 
+                  onClick={() => {
+                    setWriteOffModalItem(item);
+                    setWriteOffAmount('');
+                  }}
+                  className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer flex items-center gap-0.5 text-[10px] font-bold"
+                  title="Списати пошкоджені"
+                >
+                  <MinusCircle size={14} /> Списати
+                </button>
+              </div>
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
               Загальна кількість: <span className="font-extrabold text-slate-900">{total} шт</span>
@@ -238,7 +431,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
             <div className="space-y-2 bg-white p-2.5 rounded-xl border border-indigo-100">
               <div className="text-[11px] font-bold text-slate-700 mb-1">Редагування кількості:</div>
               
-              {/* Поле для редагування загальної кількості */}
               <div className="flex justify-between items-center gap-2 pb-1.5 border-b border-slate-100">
                 <span className="text-slate-900 font-bold text-[11px]">Загальна кількість:</span>
                 <input 
@@ -298,12 +490,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   };
 
   return (
-    <div 
-      className="space-y-6 max-w-4xl mx-auto p-4 sm:p-0 select-none"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className="space-y-6 max-w-4xl mx-auto p-4 sm:p-0 select-none">
       {!activeFolder ? (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -330,27 +517,51 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
               <p className="text-xs text-slate-400 text-center py-4">Немає доданих коробок чи пильовиків.</p>
             )}
 
-            {/* Блок історії списань */}
+            {/* Блок єдиної історії (рухи, відправки, автосписання по замовленнях та повернення) */}
             <div className="border-t border-slate-100 pt-6 space-y-3 mt-6">
-              <h3 className="text-md font-bold text-slate-900">Історія списань матеріалів</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-md font-bold text-slate-900">Історія рухів та списань матеріалів</h3>
+                {historyLog.length > 0 && (
+                  <button 
+                    onClick={() => {
+                      setHistoryLog([]);
+                      localStorage.removeItem('stock_history_log');
+                      localStorage.removeItem('processed_order_ids');
+                    }}
+                    className="text-[11px] text-slate-400 hover:text-rose-600 underline cursor-pointer"
+                  >
+                    Очистити історію
+                  </button>
+                )}
+              </div>
               <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4">
-                {writeOffsHistory.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-2">Ще не було списань.</p>
+                {historyLog.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-2">Ще не було жодних операцій чи списань.</p>
                 ) : (
                   <div className="space-y-2">
-                    {writeOffsHistory.map(record => (
-                      <div key={record.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100 text-xs">
-                        <div>
-                          <span className="font-bold text-slate-900">{record.itemName}</span>
-                          <span className="text-slate-500 ml-2">({record.target})</span>
-                          <div className="text-[11px] text-rose-600 font-medium mt-0.5">Причина: {record.reason}</div>
+                    {historyLog.map(record => {
+                      const isWriteOff = record.type === 'write_off' || record.type === 'auto_write_off';
+                      const isReturn = record.type === 'return';
+                      return (
+                        <div key={record.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100 text-xs">
+                          <div>
+                            <span className="font-bold text-slate-900">{record.itemName}</span>
+                            <span className="text-slate-500 ml-2">({record.target})</span>
+                            <div className={`text-[11px] font-medium mt-0.5 ${isWriteOff ? 'text-rose-600' : isReturn ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                              {record.reason}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className={`font-black ${isWriteOff ? 'text-rose-700' : isReturn ? 'text-emerald-700' : 'text-indigo-700'}`}>
+                              {isWriteOff ? `-${record.quantity} шт` : `+${record.quantity} шт`}
+                            </span>
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                              <Clock size={10} /> {record.date}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="font-black text-rose-700">-{record.quantity} шт</span>
-                          <div className="text-[10px] text-slate-400">{record.date}</div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -380,12 +591,75 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
         </div>
       )}
 
+      {/* Модалка відправки виробнику (з часом та кількістю) */}
+      {sendModalItem && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-900">Відправити виробнику</h3>
+              <button onClick={() => setSendModalItem(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleConfirmSendToManufacturer} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">Кому відправляємо:</label>
+                <select 
+                  value={sendTarget} 
+                  onChange={e => setSendTarget(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+                >
+                  <option value="Міла">Міла</option>
+                  <option value="Валерій">Валерій</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">Кількість (шт):</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  required 
+                  value={sendAmount} 
+                  onChange={e => setSendAmount(e.target.value)}
+                  placeholder="Наприклад: 30" 
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">Дата і час відправки:</label>
+                <input 
+                  type="datetime-local" 
+                  value={sendDateTime} 
+                  onChange={e => setSendDateTime(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setSendModalItem(null)} 
+                  className="flex-1 py-2 bg-slate-100 rounded-xl font-semibold cursor-pointer"
+                >
+                  Скасувати
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-2 bg-indigo-600 text-white rounded-xl font-semibold cursor-pointer hover:bg-indigo-700"
+                >
+                  Зберегти в історію
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Модалка списання */}
       {writeOffModalItem && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-sm text-slate-900">Списання позиції</h3>
+              <h3 className="font-bold text-sm text-slate-900">Списання пошкоджених</h3>
               <button onClick={() => setWriteOffModalItem(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X size={18} />
               </button>
@@ -411,12 +685,12 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                   required 
                   value={writeOffAmount} 
                   onChange={e => setWriteOffAmount(e.target.value)}
-                  placeholder="Наприклад: 25" 
+                  placeholder="Наприклад: 5" 
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
                 />
               </div>
               <div>
-                <label className="block font-medium text-slate-600 mb-1">Причина списання:</label>
+                <label className="block font-medium text-slate-600 mb-1">Причина / Примітка:</label>
                 <input 
                   type="text" 
                   value={writeOffReason} 
@@ -454,62 +728,16 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
             >
               <X size={20}/>
             </button>
-
             <div className="flex items-center gap-4">
               {selectedItemDetails.image ? (
                 <img src={selectedItemDetails.image} alt="" className="w-20 h-20 object-cover rounded-xl border" />
-              ) : selectedItemDetails.colorImage ? (
-                <img src={selectedItemDetails.colorImage} alt="" className="w-20 h-20 object-cover rounded-xl border" />
               ) : (
                 <div className="w-20 h-20 bg-slate-200 rounded-xl flex items-center justify-center text-xs text-slate-500">Фото</div>
               )}
               <div>
                 <h2 className="text-lg font-bold text-slate-900">{selectedItemDetails.name}</h2>
-                {selectedItemDetails.status && (
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold mt-1 ${
-                    selectedItemDetails.status === 'відмова' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {selectedItemDetails.status.toUpperCase()}
-                  </span>
-                )}
               </div>
             </div>
-
-            <div className="border-t border-slate-100 pt-4 space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-500">Розмір:</span>
-                <span className="font-medium text-slate-900">{selectedItemDetails.size || '-'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-500">Колір:</span>
-                <span className="font-medium text-slate-900">{selectedItemDetails.color || '-'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-500">Матеріал:</span>
-                <span className="font-medium text-slate-900">{selectedItemDetails.material || '-'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-500">Підошва:</span>
-                <span className="font-medium text-slate-900">{selectedItemDetails.sole || '-'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-500">Ціна продажу:</span>
-                <span className="font-bold text-emerald-700">{selectedItemDetails.price !== '' ? `${selectedItemDetails.price} грн` : '-'}</span>
-              </div>
-              {selectedItemDetails.salePrice > 0 && (
-                <div className="flex justify-between py-1 border-b border-slate-50">
-                  <span className="text-slate-500">Акційна ціна:</span>
-                  <span className="font-bold text-amber-600">{selectedItemDetails.salePrice} грн</span>
-                </div>
-              )}
-              <div className="flex justify-between py-1">
-                <span className="text-slate-500">Закупка:</span>
-                <span className="font-medium text-slate-700">
-                  {selectedItemDetails.costDisplay || (selectedItemDetails.cost !== '' ? `${selectedItemDetails.cost} ${selectedItemDetails.currency === 'USD' ? '$' : 'грн'}` : '-')}
-                </span>
-              </div>
-            </div>
-
             <div className="flex justify-end pt-2">
               <button 
                 onClick={() => setSelectedItemDetails(null)}

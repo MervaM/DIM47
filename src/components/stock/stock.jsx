@@ -15,24 +15,20 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   
   const [selectedItemDetails, setSelectedItemDetails] = useState(null);
   
-  // Стани для редагування кількості вручну
   const [editingSupplierItemId, setEditingSupplierItemId] = useState(null);
   const [tempSuppliers, setTempSuppliers] = useState({});
   const [tempTotal, setTempTotal] = useState('');
   
-  // Модалка списання пошкоджених
   const [writeOffModalItem, setWriteOffModalItem] = useState(null);
   const [writeOffAmount, setWriteOffAmount] = useState('');
   const [writeOffTarget, setWriteOffTarget] = useState('Основний склад');
   const [writeOffReason, setWriteOffReason] = useState('Пошкоджені коробки/пильовики');
 
-  // Модалка: Відправка виробнику (Мілі / Валерію)
   const [sendModalItem, setSendModalItem] = useState(null);
   const [sendAmount, setSendAmount] = useState('');
   const [sendTarget, setSendTarget] = useState('Міла');
   const [sendDateTime, setSendDateTime] = useState(() => new Date().toISOString().slice(0, 16));
 
-  // Деталізація транзакцій по замовленнях
   const [historyLog, setHistoryLog] = useState([]);
   const [isRecalculating, setIsRecalculating] = useState(false);
 
@@ -70,7 +66,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
         suppliers: item.suppliers ? { ...item.suppliers } : undefined
       }));
 
-      const generatedLogs = [];
       let changed = false;
 
       const processMaterialItem = (item, isBox) => {
@@ -109,44 +104,20 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
           }
         });
 
-        // Списання та повернення по замовленнях
+        // Списання та повернення по замовленнях (враховуємо і старі замовлення, де includeBox === undefined)
         allOrders.forEach(order => {
           const status = String(order.status || '').trim();
-          const hasBox = order.includeBox === true;
-          const hasDustbag = hasBox && (order.includeDustbag === true);
+          const hasBox = order.includeBox !== false;
+          const hasDustbag = hasBox && (order.includeDustbag !== false);
 
           const appliesToThisMaterial = isBox ? hasBox : hasDustbag;
           if (!appliesToThisMaterial) return;
 
-          const clientLabel = order.clientName || order.client || order.id.slice(0, 5);
-          const itemLabel = isBox ? 'Коробка' : 'Пильовик';
-
           if (status === 'Доставка' || status === 'Успішно') {
             const source = resolveOrderSource(order);
-            const sourceLabel = source === 'Основний склад' ? 'Мій склад' : source;
             balances[source] = (balances[source] || 0) - 1;
-
-            generatedLogs.push({
-              id: `${order.id}_${isBox ? 'box' : 'db'}`,
-              type: 'auto_write_off',
-              itemName: `${itemLabel} (#${clientLabel})`,
-              target: sourceLabel,
-              quantity: 1,
-              reason: `Статус "${status}" — списано: ${sourceLabel}`,
-              date: order.date || order.createdAt?.slice(0, 10) || ''
-            });
           } else if (status === 'Відмова') {
             balances['Основний склад'] = (balances['Основний склад'] || 0) + 1;
-
-            generatedLogs.push({
-              id: `${order.id}_ret_${isBox ? 'box' : 'db'}`,
-              type: 'return',
-              itemName: `${itemLabel} (повернення #${clientLabel})`,
-              target: 'Мій склад',
-              quantity: 1,
-              reason: 'Відмова/повернення — повернуто на Мій склад',
-              date: order.date || order.createdAt?.slice(0, 10) || ''
-            });
           }
         });
 
@@ -164,6 +135,44 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       if (boxIdx !== -1) processMaterialItem(updatedStock[boxIdx], true);
       if (dbIdx !== -1) processMaterialItem(updatedStock[dbIdx], false);
 
+      // Генеруємо єдиний список історії (1 рядок = 1 замовлення)
+      const combinedLogs = [];
+      allOrders.forEach(order => {
+        const status = String(order.status || '').trim();
+        const hasBox = order.includeBox !== false;
+        const hasDustbag = hasBox && (order.includeDustbag !== false);
+
+        if (!hasBox) return;
+
+        const clientLabel = order.clientName || order.client || order.id.slice(0, 5);
+        const packLabel = hasDustbag ? 'Коробка + Пильовик' : 'Коробка';
+
+        if (status === 'Доставка' || status === 'Успішно') {
+          const source = resolveOrderSource(order);
+          const sourceLabel = source === 'Основний склад' ? 'Мій склад' : source;
+
+          combinedLogs.push({
+            id: order.id,
+            type: 'auto_write_off',
+            itemName: `${packLabel} (#${clientLabel})`,
+            target: sourceLabel,
+            quantity: 1,
+            reason: `Статус "${status}" — списано: ${sourceLabel}`,
+            date: order.date || order.createdAt?.slice(0, 10) || ''
+          });
+        } else if (status === 'Відмова') {
+          combinedLogs.push({
+            id: `${order.id}_ret`,
+            type: 'return',
+            itemName: `${packLabel} (повернення #${clientLabel})`,
+            target: 'Мій склад',
+            quantity: 1,
+            reason: 'Відмова/повернення — повернуто на Мій склад',
+            date: order.date || order.createdAt?.slice(0, 10) || ''
+          });
+        }
+      });
+
       if (changed) {
         if (boxIdx !== -1) {
           await setDoc(doc(db, 'stock', String(updatedStock[boxIdx].id)), updatedStock[boxIdx], { merge: true });
@@ -176,7 +185,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
         if (setStock) setStock(updatedStock);
       }
 
-      setHistoryLog(generatedLogs.reverse());
+      setHistoryLog(combinedLogs.reverse());
     } catch (err) {
       console.error('Помилка точного перерахунку:', err);
     } finally {
@@ -236,7 +245,21 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     const milaVal = Number(tempSuppliers['Міла'] ?? (item.suppliers?.['Міла'] || 0));
     const valeriyVal = Number(tempSuppliers['Валерій'] ?? (item.suppliers?.['Валерій'] || 0));
 
-    const finalTotal = tempTotal !== '' ? Number(tempTotal) : (myStockVal + milaVal + valeriyVal);
+    const currentSum = myStockVal + milaVal + valeriyVal;
+    const finalTotal = tempTotal !== '' ? Number(tempTotal) : currentSum;
+
+    const oldTotal = Number(item.quantity) || 0;
+    const diff = finalTotal - oldTotal;
+    const oldBase = Number(item.baseInitialQty) || oldTotal;
+    const newBase = Math.max(0, oldBase + diff);
+
+    let updatedPurchases = Array.isArray(item.purchasesHistory) ? [...item.purchasesHistory] : [];
+    if (updatedPurchases.length > 0 && diff !== 0) {
+      updatedPurchases[updatedPurchases.length - 1] = {
+        ...updatedPurchases[updatedPurchases.length - 1],
+        qty: Math.max(0, (Number(updatedPurchases[updatedPurchases.length - 1].qty) || 0) + diff)
+      };
+    }
 
     const updatedSuppliers = {
       ...(item.suppliers || {}),
@@ -247,9 +270,10 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
 
     const updatedItem = {
       ...item,
-      baseInitialQty: finalTotal,
+      baseInitialQty: newBase,
       quantity: finalTotal,
-      suppliers: updatedSuppliers
+      suppliers: updatedSuppliers,
+      purchasesHistory: updatedPurchases
     };
 
     handleAddItemWrapper(updatedItem);
@@ -445,7 +469,14 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                 <input 
                   type="number"
                   value={tempSuppliers['Основний склад'] ?? myStock}
-                  onChange={e => setTempSuppliers(prev => ({ ...prev, 'Основний склад': e.target.value }))}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setTempSuppliers(prev => {
+                      const next = { ...prev, 'Основний склад': val };
+                      setTempTotal((Number(val) || 0) + (Number(next['Міла']) || 0) + (Number(next['Валерій']) || 0));
+                      return next;
+                    });
+                  }}
                   className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
                 />
               </div>
@@ -454,7 +485,14 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                 <input 
                   type="number"
                   value={tempSuppliers['Міла'] ?? mila}
-                  onChange={e => setTempSuppliers(prev => ({ ...prev, 'Міла': e.target.value }))}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setTempSuppliers(prev => {
+                      const next = { ...prev, 'Міла': val };
+                      setTempTotal((Number(next['Основний склад']) || 0) + (Number(val) || 0) + (Number(next['Валерій']) || 0));
+                      return next;
+                    });
+                  }}
                   className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
                 />
               </div>
@@ -463,7 +501,14 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                 <input 
                   type="number"
                   value={tempSuppliers['Валерій'] ?? valeriy}
-                  onChange={e => setTempSuppliers(prev => ({ ...prev, 'Валерій': e.target.value }))}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setTempSuppliers(prev => {
+                      const next = { ...prev, 'Валерій': val };
+                      setTempTotal((Number(next['Основний склад']) || 0) + (Number(next['Міла']) || 0) + (Number(val) || 0));
+                      return next;
+                    });
+                  }}
                   className="w-20 px-2 py-1 border rounded text-right font-bold text-xs"
                 />
               </div>
@@ -526,7 +571,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
               <p className="text-xs text-slate-400 text-center py-4">Немає доданих коробок чи пильовиків.</p>
             )}
 
-            {/* Блок єдиної історії */}
             <div className="border-t border-slate-100 pt-6 space-y-3 mt-6">
               <div className="flex justify-between items-center">
                 <h3 className="text-md font-bold text-slate-900">Деталізація списань та повернень по замовленнях</h3>
@@ -590,7 +634,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
         </div>
       )}
 
-      {/* Модалка відправки виробнику */}
       {sendModalItem && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
@@ -653,7 +696,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
         </div>
       )}
 
-      {/* Модалка списання */}
       {writeOffModalItem && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
@@ -717,7 +759,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
         </div>
       )}
 
-      {/* Модалка деталей товару */}
       {selectedItemDetails && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 flex flex-col gap-4 relative">

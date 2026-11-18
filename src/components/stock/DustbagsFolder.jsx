@@ -38,7 +38,7 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
         snap.forEach((docSnap) => {
           const o = docSnap.data();
           const status = String(o.status || '').trim();
-          const hasDustbag = (o.includeBox === true) && (o.includeDustbag === true);
+          const hasDustbag = (o.includeBox !== false) && (o.includeDustbag !== false);
           if (!hasDustbag) return;
 
           if (status === 'Доставка' || status === 'Успішно') {

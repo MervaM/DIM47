@@ -39,7 +39,7 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
         snap.forEach((docSnap) => {
           const o = docSnap.data();
           const status = String(o.status || '').trim();
-          const hasBox = o.includeBox === true;
+          const hasBox = o.includeBox !== false;
           if (!hasBox) return;
 
           if (status === 'Доставка' || status === 'Успішно') {

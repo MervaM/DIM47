@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, X, ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ImageIcon, ShoppingBag, Send, Clock } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -15,6 +15,18 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
     milaQty: '',
     valeriyQty: ''
   });
+
+  // Модалка нової закупки (поповнення)
+  const [purchaseItem, setPurchaseItem] = useState(null);
+  const [purchaseQty, setPurchaseQty] = useState('');
+  const [purchasePricePerUnit, setPurchasePricePerUnit] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // Модалка відправки виробнику (Мілі / Валерію)
+  const [sendItem, setSendItem] = useState(null);
+  const [sendTarget, setSendTarget] = useState('Міла');
+  const [sendQty, setSendQty] = useState('');
+  const [sendDateTime, setSendDateTime] = useState(() => new Date().toISOString().slice(0, 16));
 
   const boxesList = stock.filter(item => item.folderId === 'boxes');
 
@@ -66,9 +78,24 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
     }
   };
 
+  // Збереження при створенні або редагуванні
   const handleSubmit = async (e) => {
     e.preventDefault();
     const itemId = editingItem ? editingItem.id : Date.now().toString();
+    const unitCost = Number(formData.cost) || 0;
+
+    const initialHistory = editingItem?.purchasesHistory || (
+      calculatedTotal > 0 
+        ? [{
+            id: Date.now(),
+            qty: calculatedTotal,
+            pricePerUnit: unitCost,
+            totalSum: +(calculatedTotal * unitCost).toFixed(2),
+            date: new Date().toISOString().split('T')[0],
+            note: 'Початкова закупка'
+          }]
+        : []
+    );
 
     const newItem = {
       id: itemId,
@@ -76,13 +103,15 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
       name: `Коробки (${formData.sizeBox})`,
       sizeBox: formData.sizeBox,
       quantity: calculatedTotal,
-      cost: Number(formData.cost) || 0,
+      cost: unitCost,
       image: formData.image,
       suppliers: {
         'Основний склад': parsedMyStock,
         'Міла': parsedMila,
         'Валерій': parsedValeriy
-      }
+      },
+      purchasesHistory: initialHistory,
+      shipmentsHistory: editingItem?.shipmentsHistory || []
     };
 
     try {
@@ -92,6 +121,100 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
       setIsModalOpen(false);
     } catch (err) {
       console.error('Помилка збереження коробок:', err);
+    }
+  };
+
+  // Додавання нової закупки
+  const handleAddPurchase = async (e) => {
+    e.preventDefault();
+    const qty = Number(purchaseQty);
+    const price = Number(purchasePricePerUnit);
+    if (!purchaseItem || isNaN(qty) || qty <= 0) return;
+
+    const currentSuppliers = purchaseItem.suppliers || {
+      'Основний склад': purchaseItem.quantity || 0,
+      'Міла': 0,
+      'Валерій': 0
+    };
+
+    const newMyStock = (currentSuppliers['Основний склад'] || 0) + qty;
+    const newTotal = (purchaseItem.quantity || 0) + qty;
+
+    const newPurchaseRecord = {
+      id: Date.now(),
+      qty,
+      pricePerUnit: price || purchaseItem.cost || 0,
+      totalSum: +(qty * (price || purchaseItem.cost || 0)).toFixed(2),
+      date: purchaseDate,
+      note: 'Дозакупка'
+    };
+
+    const updatedItem = {
+      ...purchaseItem,
+      quantity: newTotal,
+      cost: price > 0 ? price : purchaseItem.cost,
+      suppliers: {
+        ...currentSuppliers,
+        'Основний склад': newMyStock
+      },
+      purchasesHistory: [newPurchaseRecord, ...(purchaseItem.purchasesHistory || [])]
+    };
+
+    try {
+      const docRef = doc(db, 'stock', String(purchaseItem.id));
+      await setDoc(docRef, updatedItem, { merge: true });
+      onAddItem(updatedItem);
+      setPurchaseItem(null);
+      setPurchaseQty('');
+      setPurchasePricePerUnit('');
+    } catch (err) {
+      console.error('Помилка додавання закупки:', err);
+    }
+  };
+
+  // Відправка виробнику (Мілі / Валерію)
+  const handleSendToManufacturer = async (e) => {
+    e.preventDefault();
+    const qty = Number(sendQty);
+    if (!sendItem || isNaN(qty) || qty <= 0) return;
+
+    const currentSuppliers = sendItem.suppliers || {
+      'Основний склад': sendItem.quantity || 0,
+      'Міла': 0,
+      'Валерій': 0
+    };
+
+    const myStockVal = currentSuppliers['Основний склад'] || 0;
+    if (qty > myStockVal) {
+      alert(`На твоєму складі лише ${myStockVal} шт, неможливо відправити більше!`);
+      return;
+    }
+
+    const newShipmentRecord = {
+      id: Date.now(),
+      target: sendTarget,
+      qty,
+      date: sendDateTime ? sendDateTime.replace('T', ' ') : new Date().toLocaleString()
+    };
+
+    const updatedItem = {
+      ...sendItem,
+      suppliers: {
+        ...currentSuppliers,
+        'Основний склад': myStockVal - qty,
+        [sendTarget]: (currentSuppliers[sendTarget] || 0) + qty
+      },
+      shipmentsHistory: [newShipmentRecord, ...(sendItem.shipmentsHistory || [])]
+    };
+
+    try {
+      const docRef = doc(db, 'stock', String(sendItem.id));
+      await setDoc(docRef, updatedItem, { merge: true });
+      onAddItem(updatedItem);
+      setSendItem(null);
+      setSendQty('');
+    } catch (err) {
+      console.error('Помилка відправки виробнику:', err);
     }
   };
 
@@ -106,7 +229,7 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
         </button>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {boxesList.length === 0 ? (
           <p className="text-center text-xs text-slate-400 py-6">Ще немає доданих коробок</p>
         ) : (
@@ -117,17 +240,41 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
             const myStock = item.suppliers?.['Основний склад'] !== undefined 
               ? item.suppliers['Основний склад'] 
               : Math.max(0, total - mila - valeriy);
+            const purchases = item.purchasesHistory || [];
+            const shipments = item.shipmentsHistory || [];
 
             return (
               <div 
                 key={item.id} 
                 className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-col gap-3 hover:border-slate-200 transition"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-bold text-slate-900 text-sm">
                     Коробки ({item.sizeBox})
                   </div>
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setPurchaseItem(item);
+                        setPurchaseQty('');
+                        setPurchasePricePerUnit(item.cost || '');
+                        setPurchaseDate(new Date().toISOString().split('T')[0]);
+                      }}
+                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <ShoppingBag size={13} /> + Закупка
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSendItem(item);
+                        setSendTarget('Міла');
+                        setSendQty('');
+                        setSendDateTime(new Date().toISOString().slice(0, 16));
+                      }}
+                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <Send size={13} /> Відправити
+                    </button>
                     <button 
                       onClick={() => handleOpenModal(item)}
                       className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition cursor-pointer"
@@ -170,17 +317,60 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
 
                     {item.cost > 0 && (
                       <div className="text-slate-500 text-[10px]">
-                        Собівартість: <span className="font-semibold text-slate-800">{item.cost} грн</span>
+                        Поточна собівартість: <span className="font-semibold text-slate-800">{item.cost} грн/шт</span>
                       </div>
                     )}
                   </div>
                 </div>
+
+                {/* Історія відправок виробникам */}
+                {shipments.length > 0 && (
+                  <div className="mt-1 pt-2.5 border-t border-slate-100 space-y-1.5">
+                    <div className="text-[11px] font-bold text-indigo-950">Відправки виробникам:</div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {shipments.map(s => (
+                        <div key={s.id} className="flex justify-between items-center bg-indigo-50/50 px-2.5 py-1.5 rounded-lg text-[11px]">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-indigo-700">→ {s.target}</span>
+                            <span className="font-extrabold text-slate-900">{s.qty} шт</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                            <Clock size={10} /> {s.date}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Історія закупок цієї коробки */}
+                {purchases.length > 0 && (
+                  <div className="mt-1 pt-2.5 border-t border-slate-100 space-y-1.5">
+                    <div className="text-[11px] font-bold text-slate-600">Історія закупок:</div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {purchases.map(p => (
+                        <div key={p.id} className="flex justify-between items-center bg-slate-50 px-2.5 py-1.5 rounded-lg text-[11px]">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-emerald-700">+{p.qty} шт</span>
+                            <span className="text-slate-500">по {p.pricePerUnit} грн</span>
+                            {p.note && <span className="text-[10px] text-slate-400">({p.note})</span>}
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-500">
+                            <span className="font-semibold text-slate-700">{p.totalSum} грн</span>
+                            <span className="text-[10px] flex items-center gap-0.5"><Clock size={10} /> {p.date}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })
         )}
       </div>
 
+      {/* Модалка створення / редагування */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 flex flex-col gap-4 relative">
@@ -191,8 +381,8 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
               <X size={20} />
             </button>
 
-            <h3 className="text-base font-bold text-slate-900">
-              {editingItem ? 'Редагувати коробку' : 'Додати коробку'}
+            <h3 className="text-base font-bold text-slate-900 text-center">
+              {editingItem ? 'Редагувати коробку' : 'Початкова закупка коробок'}
             </h3>
 
             <form onSubmit={handleSubmit} className="space-y-3 text-xs">
@@ -209,9 +399,10 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
                 </select>
               </div>
 
-              {/* Блок з трьома складами */}
               <div className="p-3 bg-indigo-50/40 rounded-2xl border border-indigo-100 space-y-2">
-                <span className="text-[11px] font-bold text-indigo-950 block text-center">Розподіл за складами (шт):</span>
+                <span className="text-[11px] font-bold text-indigo-950 block text-center">
+                  {editingItem ? 'Розподіл за складами (шт):' : 'Кількість куплених штук (початково):'}
+                </span>
                 
                 <div className="grid grid-cols-3 gap-2">
                   <div>
@@ -255,13 +446,14 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
               </div>
 
               <div>
-                <label className="block font-medium text-slate-500 mb-1 text-center">Собівартість (грн)</label>
+                <label className="block font-medium text-slate-500 mb-1 text-center">Собівартість 1 шт (грн)</label>
                 <input
                   type="number"
+                  step="any"
                   value={formData.cost}
                   onChange={(e) => setFormData(prev => ({ ...prev, cost: e.target.value }))}
-                  placeholder="Введіть собівартість"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 text-center"
+                  placeholder="Напр. 115.56"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 text-center font-bold"
                 />
               </div>
 
@@ -291,6 +483,140 @@ export default function BoxesFolder({ stock = [], onAddItem = () => {}, onDelete
                   className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer transition"
                 >
                   Зберегти
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка нової закупки (поповнення) */}
+      {purchaseItem && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-900">Нова закупка: Коробки ({purchaseItem.sizeBox})</h3>
+              <button onClick={() => setPurchaseItem(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleAddPurchase} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">Кількість куплених коробок (шт):</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  required 
+                  value={purchaseQty} 
+                  onChange={e => setPurchaseQty(e.target.value)}
+                  placeholder="Наприклад: 100" 
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">Ціна за 1 шт (грн):</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  min="0"
+                  required
+                  value={purchasePricePerUnit} 
+                  onChange={e => setPurchasePricePerUnit(e.target.value)}
+                  placeholder="Наприклад: 115.56" 
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">Дата закупки:</label>
+                <input 
+                  type="date" 
+                  value={purchaseDate} 
+                  onChange={e => setPurchaseDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+                />
+              </div>
+              {purchaseQty > 0 && purchasePricePerUnit > 0 && (
+                <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-100 flex justify-between items-center">
+                  <span className="text-emerald-800 font-medium">Загальна сума партії:</span>
+                  <span className="font-black text-emerald-900">{(Number(purchaseQty) * Number(purchasePricePerUnit)).toFixed(2)} грн</span>
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setPurchaseItem(null)} 
+                  className="flex-1 py-2 bg-slate-100 rounded-xl font-semibold cursor-pointer"
+                >
+                  Скасувати
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-2 bg-emerald-600 text-white rounded-xl font-semibold cursor-pointer hover:bg-emerald-700"
+                >
+                  Додати на склад
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка відправки виробнику */}
+      {sendItem && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-sm text-slate-900">Відправити виробнику: Коробки ({sendItem.sizeBox})</h3>
+              <button onClick={() => setSendItem(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSendToManufacturer} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">Кому відправляємо:</label>
+                <select 
+                  value={sendTarget} 
+                  onChange={e => setSendTarget(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+                >
+                  <option value="Міла">Міла</option>
+                  <option value="Валерій">Валерій</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">Кількість (шт):</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  required 
+                  value={sendQty} 
+                  onChange={e => setSendQty(e.target.value)}
+                  placeholder="Наприклад: 25" 
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-medium text-slate-600 mb-1">Дата і час відправки:</label>
+                <input 
+                  type="datetime-local" 
+                  value={sendDateTime} 
+                  onChange={e => setSendDateTime(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setSendItem(null)} 
+                  className="flex-1 py-2 bg-slate-100 rounded-xl font-semibold cursor-pointer"
+                >
+                  Скасувати
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-2 bg-indigo-600 text-white rounded-xl font-semibold cursor-pointer hover:bg-indigo-700"
+                >
+                  Відправити
                 </button>
               </div>
             </form>

@@ -139,19 +139,18 @@ export default function Dashboard() {
     setShowNewOrderModal(true);
   };
 
-  // Збереження картки (ТТН, Instagram, склади)
+  // Збереження картки (ТТН, Instagram, налаштування пакування без подвійного списання)
   const handleInlineSaveOrder = async (updatedOrder) => {
     try {
       const orderRef = doc(db, "orders", updatedOrder.id);
-      const previousOrder = orders.find(o => o.id === updatedOrder.id);
-
-      const hadTtnBefore = Boolean(previousOrder?.ttn);
-      const hasTtnNow = Boolean(updatedOrder.ttn);
 
       let targetSource = updatedOrder.packagingSource || 'Основний склад';
       if (targetSource === 'Мій склад (у мене)' || targetSource === 'Мій склад') {
         targetSource = 'Основний склад';
       }
+
+      const hasBox = updatedOrder.includeBox ?? true;
+      const hasDustbag = hasBox ? (updatedOrder.includeDustbag ?? true) : false;
 
       const updateData = {
         clientName: updatedOrder.client || updatedOrder.clientName || '',
@@ -164,60 +163,12 @@ export default function Dashboard() {
         advance: Number(updatedOrder.advance) || 0,
         supplier: updatedOrder.supplier || 'Міла',
         packagingSource: targetSource,
-        includeBox: updatedOrder.includeBox ?? true,
-        includeDustbag: updatedOrder.includeDustbag ?? true
+        includeBox: hasBox,
+        includeDustbag: hasDustbag
       };
 
       await updateDoc(orderRef, updateData);
-
-      if (hasTtnNow) {
-        const stockSnap = await getDocs(collection(db, "stock"));
-
-        for (const docSnap of stockSnap.docs) {
-          const itemData = docSnap.data();
-          const stockRef = doc(db, "stock", docSnap.id);
-
-          const isBox = itemData.folderId === 'boxes';
-          const isDustbag = itemData.folderId === 'dustbags';
-
-          if ((isBox && updatedOrder.includeBox) || (isDustbag && updatedOrder.includeDustbag)) {
-            const currentSuppliers = {
-              'Основний склад': 0,
-              'Міла': 0,
-              'Валерій': 0,
-              ...(itemData.suppliers || {})
-            };
-
-            if (!hadTtnBefore) {
-              const currentQty = Number(currentSuppliers[targetSource]) || 0;
-              if (currentQty > 0) {
-                currentSuppliers[targetSource] = currentQty - 1;
-              }
-            } 
-            else if (previousOrder?.packagingSource && previousOrder.packagingSource !== targetSource) {
-              let oldSource = previousOrder.packagingSource;
-              if (oldSource === 'Мій склад (у мене)' || oldSource === 'Мій склад') {
-                oldSource = 'Основний склад';
-              }
-
-              currentSuppliers[oldSource] = (Number(currentSuppliers[oldSource]) || 0) + 1;
-              currentSuppliers[targetSource] = Math.max(0, (Number(currentSuppliers[targetSource]) || 0) - 1);
-            }
-
-            const newTotalQty = (Number(currentSuppliers['Основний склад']) || 0) + 
-                                (Number(currentSuppliers['Міла']) || 0) + 
-                                (Number(currentSuppliers['Валерій']) || 0);
-
-            await updateDoc(stockRef, { 
-              suppliers: currentSuppliers, 
-              quantity: newTotalQty 
-            });
-          }
-        }
-      }
-
       await fetchOrders();
-      await fetchStockProducts();
     } catch (error) {
       console.error('Помилка оновлення картки:', error);
       alert('Не вдалося зберегти зміни');
@@ -262,10 +213,14 @@ export default function Dashboard() {
         await updateDoc(orderRef, dbPayload);
       } else {
         const initialStatus = orderData.stockItemId ? 'З наявності' : 'Нове';
+        const defaultSource = initialStatus === 'З наявності' ? 'Основний склад' : (orderData.supplier || 'Міла');
         const newDbPayload = {
           ...dbPayload,
           date: new Date().toLocaleDateString('uk-UA'),
           status: initialStatus,
+          packagingSource: defaultSource,
+          includeBox: true,
+          includeDustbag: true,
           createdAt: new Date().toISOString()
         };
         await addDoc(collection(db, "orders"), newDbPayload);
@@ -314,39 +269,6 @@ export default function Dashboard() {
           image: targetOrder.image || targetOrder.productImage || '',
           createdAt: new Date().toISOString()
         });
-
-        if (targetOrder.ttn) {
-          const stockSnap = await getDocs(collection(db, "stock"));
-
-          for (const docSnap of stockSnap.docs) {
-            const itemData = docSnap.data();
-            const stockRef = doc(db, "stock", docSnap.id);
-
-            const isBox = itemData.folderId === 'boxes' && targetOrder.includeBox;
-            const isDustbag = itemData.folderId === 'dustbags' && targetOrder.includeDustbag;
-
-            if (isBox || isDustbag) {
-              const currentSuppliers = {
-                'Основний склад': 0,
-                'Міла': 0,
-                'Валерій': 0,
-                ...(itemData.suppliers || {})
-              };
-
-              const currentMyQty = Number(currentSuppliers['Основний склад']) || 0;
-              currentSuppliers['Основний склад'] = currentMyQty + 1;
-
-              const newTotalQty = (Number(currentSuppliers['Основний склад']) || 0) + 
-                                  (Number(currentSuppliers['Міла']) || 0) + 
-                                  (Number(currentSuppliers['Валерій']) || 0);
-
-              await updateDoc(stockRef, { 
-                suppliers: currentSuppliers, 
-                quantity: newTotalQty 
-              });
-            }
-          }
-        }
 
         await fetchStockProducts();
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Edit3, Check, MinusCircle, Send, Clock, RefreshCw } from 'lucide-react';
 import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { db } from '../../firebase';
@@ -15,7 +15,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   
   const [selectedItemDetails, setSelectedItemDetails] = useState(null);
   
-  // Стани для редагування кількості
+  // Стани для редагування кількості вручну
   const [editingSupplierItemId, setEditingSupplierItemId] = useState(null);
   const [tempSuppliers, setTempSuppliers] = useState({});
   const [tempTotal, setTempTotal] = useState('');
@@ -32,202 +32,162 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   const [sendTarget, setSendTarget] = useState('Міла');
   const [sendDateTime, setSendDateTime] = useState(() => new Date().toISOString().slice(0, 16));
 
-  // Єдина історія транзакцій
-  const [historyLog, setHistoryLog] = useState(() => {
-    const saved = localStorage.getItem('stock_history_log');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Деталізація транзакцій по замовленнях
+  const [historyLog, setHistoryLog] = useState([]);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
-  // Визначаємо, з чийого складу списувати замовлення (за packagingSource з картки ТТН)
+  // Визначаємо склад пакування для замовлення
   const resolveOrderSource = (order) => {
     const src = String(order.packagingSource || '').trim();
     if (src === 'Міла') return 'Міла';
     if (src === 'Валерій') return 'Валерій';
+    if (src === 'Основний склад' || src === 'Мій склад' || src === 'Мій склад (у мене)') {
+      return 'Основний склад';
+    }
+    if (order.status === 'З наявності') return 'Основний склад';
+    if (order.supplier === 'Міла') return 'Міла';
+    if (order.supplier === 'Валерій') return 'Валерій';
     return 'Основний склад';
   };
 
-  // Синхронізація замовлень зі складом строго за галочками includeBox та includeDustbag
-  useEffect(() => {
-    if (!stock || stock.length === 0) return;
+  // Головна функція точного перерахунку залишків з нуля (Закупки + Відправки виробникам - Замовлення + Відмови)
+  const recalculateExactBalances = useCallback(async (currentStockList) => {
+    if (!currentStockList || currentStockList.length === 0) return;
+    setIsRecalculating(true);
 
-    const syncOrdersWithStock = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "orders"));
-        const fetchedOrders = [];
-        querySnapshot.forEach((docSnap) => {
-          fetchedOrders.push({ id: docSnap.id, ...docSnap.data() });
+    try {
+      const ordersSnap = await getDocs(collection(db, "orders"));
+      const allOrders = [];
+      ordersSnap.forEach((d) => allOrders.push({ id: d.id, ...d.data() }));
+
+      const updatedStock = currentStockList.map(item => ({
+        ...item,
+        suppliers: item.suppliers ? { ...item.suppliers } : undefined
+      }));
+
+      const generatedLogs = [];
+      let changed = false;
+
+      const processMaterialItem = (item, isBox) => {
+        // 1. Базова закупка (сума з purchasesHistory або базова загальна кількість)
+        const purchases = Array.isArray(item.purchasesHistory) ? item.purchasesHistory : [];
+        let basePurchased = purchases.reduce((sum, p) => sum + (Number(p.qty) || 0), 0);
+
+        if (basePurchased === 0 && item.baseInitialQty !== undefined) {
+          basePurchased = Number(item.baseInitialQty) || 0;
+        } else if (basePurchased === 0) {
+          basePurchased = Number(item.quantity) || 0;
+        }
+
+        const balances = {
+          'Основний склад': basePurchased,
+          'Міла': 0,
+          'Валерій': 0
+        };
+
+        // 2. Враховуємо відправки виробникам (shipmentsHistory)
+        const shipments = Array.isArray(item.shipmentsHistory) ? item.shipmentsHistory : [];
+        shipments.forEach(s => {
+          const qty = Number(s.qty) || 0;
+          if (qty > 0 && (s.target === 'Міла' || s.target === 'Валерій')) {
+            balances['Основний склад'] -= qty;
+            balances[s.target] += qty;
+          }
         });
 
-        const processedShipments = JSON.parse(localStorage.getItem('processed_shipments_v3') || '[]');
-        const processedReturns = JSON.parse(localStorage.getItem('processed_returns_v3') || '[]');
-
-        // Замовлення, які поїхали або виконані (Доставка або Успішно)
-        const shippedOrders = fetchedOrders.filter(
-          o => (o.status === 'Доставка' || o.status === 'Успішно') && !processedShipments.includes(o.id)
-        );
-
-        // Повернення (Відмова)
-        const returnedOrders = fetchedOrders.filter(
-          o => o.status === 'Відмова' && !processedReturns.includes(o.id)
-        );
-
-        if (shippedOrders.length === 0 && returnedOrders.length === 0) return;
-
-        let updatedStock = stock.map(item => ({
-          ...item,
-          suppliers: item.suppliers ? { ...item.suppliers } : undefined
-        }));
-
-        let newLogEntries = [];
-        const newProcessedShipments = [...processedShipments];
-        const newProcessedReturns = [...processedReturns];
-        let boxesChanged = false;
-        let dustbagsChanged = false;
-
-        const boxIndex = updatedStock.findIndex(item => item.folderId === 'boxes');
-        const dustbagIndex = updatedStock.findIndex(item => item.folderId === 'dustbags');
-
-        // 1. Списання по відправлених замовленнях (тільки де стоять галочки includeBox / includeDustbag)
-        shippedOrders.forEach(order => {
-          const hasBox = order.includeBox === true;
-          const hasDustbag = order.includeDustbag === true;
-
-          // Якщо не стоїть жодна галочка (їхало в коробці виробника без наших матеріалів) — пропускаємо
-          if (!hasBox && !hasDustbag) {
-            newProcessedShipments.push(order.id);
-            return;
+        // 3. Враховуємо ручні списання пошкоджених (writeOffHistory)
+        const writeOffs = Array.isArray(item.writeOffHistory) ? item.writeOffHistory : [];
+        writeOffs.forEach(w => {
+          const qty = Number(w.qty) || 0;
+          const target = w.target || 'Основний склад';
+          if (qty > 0 && balances[target] !== undefined) {
+            balances[target] -= qty;
           }
-
-          const targetSource = resolveOrderSource(order);
-          const sourceLabel = targetSource === 'Основний склад' ? 'Мій склад' : targetSource;
-          const clientLabel = order.clientName || order.client || order.id.slice(0, 5);
-
-          // Списуємо коробку, якщо стоїть галочка includeBox
-          if (hasBox && boxIndex !== -1) {
-            const box = updatedStock[boxIndex];
-            const suppliers = box.suppliers || { 'Основний склад': box.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-            suppliers[targetSource] = Math.max(0, (suppliers[targetSource] || 0) - 1);
-            box.suppliers = suppliers;
-            box.quantity = (suppliers['Основний склад'] || 0) + (suppliers['Міла'] || 0) + (suppliers['Валерій'] || 0);
-            boxesChanged = true;
-
-            newLogEntries.push({
-              id: Date.now() + Math.random(),
-              type: 'auto_write_off',
-              itemName: `Коробка (#${clientLabel})`,
-              target: sourceLabel,
-              quantity: 1,
-              reason: `Статус "${order.status}" (галочка Коробка) — списано: ${sourceLabel}`,
-              date: new Date().toLocaleString()
-            });
-          }
-
-          // Списуємо пильовик, якщо стоїть галочка includeDustbag
-          if (hasDustbag && dustbagIndex !== -1) {
-            const dbItem = updatedStock[dustbagIndex];
-            const suppliers = dbItem.suppliers || { 'Основний склад': dbItem.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-            suppliers[targetSource] = Math.max(0, (suppliers[targetSource] || 0) - 1);
-            dbItem.suppliers = suppliers;
-            dbItem.quantity = (suppliers['Основний склад'] || 0) + (suppliers['Міла'] || 0) + (suppliers['Валерій'] || 0);
-            dustbagsChanged = true;
-
-            newLogEntries.push({
-              id: Date.now() + Math.random(),
-              type: 'auto_write_off',
-              itemName: `Пильовик (#${clientLabel})`,
-              target: sourceLabel,
-              quantity: 1,
-              reason: `Статус "${order.status}" (галочка Пильовик) — списано: ${sourceLabel}`,
-              date: new Date().toLocaleString()
-            });
-          }
-
-          newProcessedShipments.push(order.id);
         });
 
-        // 2. Повернення (Відмова) -> плюсуємо на Мій склад (Основний склад) тільки те, де була галочка
-        returnedOrders.forEach(order => {
+        // 4. Проходимо по всіх замовленнях
+        allOrders.forEach(order => {
+          const status = String(order.status || '').trim();
           const hasBox = order.includeBox === true;
-          const hasDustbag = order.includeDustbag === true;
+          // Залізне правило: пильовик може бути відправлений ТІЛЬКИ разом із коробкою
+          const hasDustbag = hasBox && (order.includeDustbag === true);
 
-          if (!hasBox && !hasDustbag) {
-            newProcessedReturns.push(order.id);
-            return;
-          }
+          const appliesToThisMaterial = isBox ? hasBox : hasDustbag;
+          if (!appliesToThisMaterial) return;
 
           const clientLabel = order.clientName || order.client || order.id.slice(0, 5);
+          const itemLabel = isBox ? 'Коробка' : 'Пильовик';
 
-          if (hasBox && boxIndex !== -1) {
-            const box = updatedStock[boxIndex];
-            const suppliers = box.suppliers || { 'Основний склад': box.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-            suppliers['Основний склад'] = (suppliers['Основний склад'] || 0) + 1;
-            box.suppliers = suppliers;
-            box.quantity = (suppliers['Основний склад'] || 0) + (suppliers['Міла'] || 0) + (suppliers['Валерій'] || 0);
-            boxesChanged = true;
+          if (status === 'Доставка' || status === 'Успішно') {
+            const source = resolveOrderSource(order);
+            const sourceLabel = source === 'Основний склад' ? 'Мій склад' : source;
+            balances[source] = (balances[source] || 0) - 1;
 
-            newLogEntries.push({
-              id: Date.now() + Math.random(),
+            generatedLogs.push({
+              id: `${order.id}_${isBox ? 'box' : 'db'}`,
+              type: 'auto_write_off',
+              itemName: `${itemLabel} (#${clientLabel})`,
+              target: sourceLabel,
+              quantity: 1,
+              reason: `Статус "${status}" — списано: ${sourceLabel}`,
+              date: order.date || order.createdAt?.slice(0, 10) || ''
+            });
+          } else if (status === 'Відмова') {
+            // Відмова повертається на Мій склад (Основний склад)
+            balances['Основний склад'] = (balances['Основний склад'] || 0) + 1;
+
+            generatedLogs.push({
+              id: `${order.id}_ret_${isBox ? 'box' : 'db'}`,
               type: 'return',
-              itemName: `Коробка (повернення #${clientLabel})`,
+              itemName: `${itemLabel} (повернення #${clientLabel})`,
               target: 'Мій склад',
               quantity: 1,
-              reason: 'Відмова/повернення — додано на Мій склад',
-              date: new Date().toLocaleString()
+              reason: 'Відмова/повернення — повернуто на Мій склад',
+              date: order.date || order.createdAt?.slice(0, 10) || ''
             });
           }
-
-          if (hasDustbag && dustbagIndex !== -1) {
-            const dbItem = updatedStock[dustbagIndex];
-            const suppliers = dbItem.suppliers || { 'Основний склад': dbItem.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-            suppliers['Основний склад'] = (suppliers['Основний склад'] || 0) + 1;
-            dbItem.suppliers = suppliers;
-            dbItem.quantity = (suppliers['Основний склад'] || 0) + (suppliers['Міла'] || 0) + (suppliers['Валерій'] || 0);
-            dustbagsChanged = true;
-
-            newLogEntries.push({
-              id: Date.now() + Math.random(),
-              type: 'return',
-              itemName: `Пильовик (повернення #${clientLabel})`,
-              target: 'Мій склад',
-              quantity: 1,
-              reason: 'Відмова/повернення — додано на Мій склад',
-              date: new Date().toLocaleString()
-            });
-          }
-
-          newProcessedReturns.push(order.id);
         });
 
-        // Зберігаємо оновлені залишки у Firestore та в локальний стан
-        if (boxesChanged && boxIndex !== -1) {
-          const updatedBox = updatedStock[boxIndex];
-          await setDoc(doc(db, 'stock', String(updatedBox.id)), updatedBox, { merge: true });
-          if (onAddItem) onAddItem(updatedBox);
-        }
+        const newTotal = (balances['Основний склад'] || 0) + (balances['Міла'] || 0) + (balances['Валерій'] || 0);
 
-        if (dustbagsChanged && dustbagIndex !== -1) {
-          const updatedDb = updatedStock[dustbagIndex];
-          await setDoc(doc(db, 'stock', String(updatedDb.id)), updatedDb, { merge: true });
-          if (onAddItem) onAddItem(updatedDb);
-        }
+        item.baseInitialQty = basePurchased;
+        item.suppliers = balances;
+        item.quantity = newTotal;
+        changed = true;
+      };
 
-        if (setStock && (boxesChanged || dustbagsChanged)) {
-          setStock(updatedStock);
-        }
+      const boxIdx = updatedStock.findIndex(i => i.folderId === 'boxes');
+      const dbIdx = updatedStock.findIndex(i => i.folderId === 'dustbags');
 
-        if (newLogEntries.length > 0) {
-          setHistoryLog(prev => [...newLogEntries, ...prev]);
-        }
+      if (boxIdx !== -1) processMaterialItem(updatedStock[boxIdx], true);
+      if (dbIdx !== -1) processMaterialItem(updatedStock[dbIdx], false);
 
-        localStorage.setItem('processed_shipments_v3', JSON.stringify(newProcessedShipments));
-        localStorage.setItem('processed_returns_v3', JSON.stringify(newProcessedReturns));
-      } catch (err) {
-        console.error("Помилка синхронізації замовлень зі складом:", err);
+      if (changed) {
+        if (boxIdx !== -1) {
+          await setDoc(doc(db, 'stock', String(updatedStock[boxIdx].id)), updatedStock[boxIdx], { merge: true });
+          if (onAddItem) onAddItem(updatedStock[boxIdx]);
+        }
+        if (dbIdx !== -1) {
+          await setDoc(doc(db, 'stock', String(updatedStock[dbIdx].id)), updatedStock[dbIdx], { merge: true });
+          if (onAddItem) onAddItem(updatedStock[dbIdx]);
+        }
+        if (setStock) setStock(updatedStock);
       }
-    };
 
-    syncOrdersWithStock();
-  }, [stock]);
+      setHistoryLog(generatedLogs.reverse());
+    } catch (err) {
+      console.error('Помилка точного перерахунку:', err);
+    } finally {
+      setIsRecalculating(false);
+    }
+  }, [onAddItem, setStock]);
+
+  // Автоматичний перерахунок при відкритті складу
+  useEffect(() => {
+    if (stock && stock.length > 0) {
+      recalculateExactBalances(stock);
+    }
+  }, []);
 
   useEffect(() => {
     if (activeFolder) {
@@ -236,10 +196,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       localStorage.removeItem('activeFolder');
     }
   }, [activeFolder]);
-
-  useEffect(() => {
-    localStorage.setItem('stock_history_log', JSON.stringify(historyLog));
-  }, [historyLog]);
 
   const folders = [
     { id: 'shoes', name: 'Взуття' },
@@ -256,17 +212,13 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       console.error("Помилка збереження в Firestore:", e);
     }
 
-    if (onAddItem) {
-      onAddItem(newItem);
-    } else if (setStock) {
+    if (setStock) {
       setStock(prev => {
         const exists = prev.some(item => item.id === newItem.id);
-        if (exists) {
-          return prev.map(item => item.id === newItem.id ? newItem : item);
-        }
-        return [newItem, ...prev];
+        return exists ? prev.map(item => item.id === newItem.id ? newItem : item) : [newItem, ...prev];
       });
     }
+    if (onAddItem) onAddItem(newItem);
   };
 
   const handleDeleteItemWrapper = (id) => {
@@ -278,10 +230,13 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     setSelectedItemDetails(null);
   };
 
+  // Ручне коригування початкової бази/залишків
   const handleSaveSuppliers = (item) => {
     const myStockVal = Number(tempSuppliers['Основний склад'] ?? (item.suppliers?.['Основний склад'] || 0));
     const milaVal = Number(tempSuppliers['Міла'] ?? (item.suppliers?.['Міла'] || 0));
     const valeriyVal = Number(tempSuppliers['Валерій'] ?? (item.suppliers?.['Валерій'] || 0));
+
+    const finalTotal = tempTotal !== '' ? Number(tempTotal) : (myStockVal + milaVal + valeriyVal);
 
     const updatedSuppliers = {
       ...(item.suppliers || {}),
@@ -290,10 +245,9 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       'Валерій': valeriyVal,
     };
 
-    const finalTotal = tempTotal !== '' ? Number(tempTotal) : (myStockVal + milaVal + valeriyVal);
-
     const updatedItem = {
       ...item,
+      baseInitialQty: finalTotal,
       quantity: finalTotal,
       suppliers: updatedSuppliers
     };
@@ -314,42 +268,30 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       'Валерій': 0
     };
 
-    const currentTargetVal = currentSuppliers[writeOffTarget] || 0;
-    if (qty > currentTargetVal) {
-      alert('Неможливо списати більше, ніж є у наявності у цього власника/виробника!');
-      return;
-    }
-
     const updatedSuppliers = {
       ...currentSuppliers,
-      [writeOffTarget]: currentTargetVal - qty
+      [writeOffTarget]: (currentSuppliers[writeOffTarget] || 0) - qty
     };
 
-    const newTotal = Math.max(0, (writeOffModalItem.quantity || 0) - qty);
+    const newTotal = (writeOffModalItem.quantity || 0) - qty;
 
     const updatedItem = {
       ...writeOffModalItem,
       quantity: newTotal,
-      suppliers: updatedSuppliers
+      suppliers: updatedSuppliers,
+      writeOffHistory: [
+        {
+          id: Date.now(),
+          target: writeOffTarget,
+          qty,
+          reason: writeOffReason || 'Пошкоджено',
+          date: new Date().toLocaleString()
+        },
+        ...(writeOffModalItem.writeOffHistory || [])
+      ]
     };
 
     handleAddItemWrapper(updatedItem);
-
-    const itemName = writeOffModalItem.folderId === 'boxes' 
-      ? `Коробки (${writeOffModalItem.sizeBox || 'Великі'})` 
-      : (writeOffModalItem.name || 'Пильовик');
-
-    const newRecord = {
-      id: Date.now(),
-      type: 'write_off',
-      itemName,
-      target: writeOffTarget === 'Основний склад' ? 'Мій склад' : writeOffTarget,
-      quantity: qty,
-      reason: writeOffReason || 'Пошкоджено',
-      date: new Date().toLocaleString()
-    };
-
-    setHistoryLog(prev => [newRecord, ...prev]);
     setWriteOffModalItem(null);
     setWriteOffAmount('');
   };
@@ -367,11 +309,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     };
 
     const myStockVal = currentSuppliers['Основний склад'] || 0;
-    if (qty > myStockVal) {
-      alert('На твоєму складі недостатньо штук для відправки!');
-      return;
-    }
-
     const targetVal = currentSuppliers[sendTarget] || 0;
 
     const updatedSuppliers = {
@@ -395,22 +332,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     };
 
     handleAddItemWrapper(updatedItem);
-
-    const itemName = sendModalItem.folderId === 'boxes' 
-      ? `Коробки (${sendModalItem.sizeBox || 'Великі'})` 
-      : (sendModalItem.name || 'Пильовик');
-
-    const newRecord = {
-      id: Date.now(),
-      type: 'send',
-      itemName,
-      target: sendTarget,
-      quantity: qty,
-      date: sendDateTime ? sendDateTime.replace('T', ' ') : new Date().toLocaleString(),
-      reason: `Відправлено виробнику (${sendTarget})`
-    };
-
-    setHistoryLog(prev => [newRecord, ...prev]);
     setSendModalItem(null);
     setSendAmount('');
   };
@@ -428,7 +349,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     const valeriy = item.suppliers?.['Валерій'] || 0;
     const myStock = item.suppliers?.['Основний склад'] !== undefined 
       ? item.suppliers['Основний склад'] 
-      : Math.max(0, total - mila - valeriy);
+      : (total - mila - valeriy);
 
     const isEditing = editingSupplierItemId === item.id;
 
@@ -586,7 +507,17 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
           </div>
 
           <div className="border-t border-slate-100 pt-6 space-y-6">
-            <h3 className="text-lg font-bold text-slate-900 text-center sm:text-left">Загальний перегляд складу</h3>
+            <div className="flex flex-wrap justify-between items-center gap-2">
+              <h3 className="text-lg font-bold text-slate-900">Загальний перегляд складу</h3>
+              <button 
+                onClick={() => recalculateExactBalances(stock)}
+                disabled={isRecalculating}
+                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <RefreshCw size={13} className={isRecalculating ? 'animate-spin' : ''} /> 
+                {isRecalculating ? 'Перерахунок...' : 'Перерахувати по замовленнях'}
+              </button>
+            </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {boxesList.map(item => renderCard(item, true))}
@@ -599,38 +530,12 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
 
             {/* Блок єдиної історії */}
             <div className="border-t border-slate-100 pt-6 space-y-3 mt-6">
-              <div className="flex flex-wrap justify-between items-center gap-2">
-                <h3 className="text-md font-bold text-slate-900">Історія рухів та списань матеріалів</h3>
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => {
-                      localStorage.removeItem('processed_shipments_v3');
-                      localStorage.removeItem('processed_returns_v3');
-                      window.location.reload();
-                    }}
-                    className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                    title="Перевірити всі замовлення з бази ще раз"
-                  >
-                    <RefreshCw size={11} /> Оновити по замовленнях
-                  </button>
-                  {historyLog.length > 0 && (
-                    <button 
-                      onClick={() => {
-                        setHistoryLog([]);
-                        localStorage.removeItem('stock_history_log');
-                        localStorage.removeItem('processed_shipments_v3');
-                        localStorage.removeItem('processed_returns_v3');
-                      }}
-                      className="text-[11px] text-slate-400 hover:text-rose-600 underline cursor-pointer"
-                    >
-                      Очистити історію
-                    </button>
-                  )}
-                </div>
+              <div className="flex justify-between items-center">
+                <h3 className="text-md font-bold text-slate-900">Деталізація списань та повернень по замовленнях</h3>
               </div>
               <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4">
                 {historyLog.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-2">Ще не було жодних операцій чи списань.</p>
+                  <p className="text-xs text-slate-400 text-center py-2">Немає замовлень зі статусами Доставка / Успішно / Відмова.</p>
                 ) : (
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {historyLog.map(record => {
@@ -649,9 +554,11 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                             <span className={`font-black ${isWriteOff ? 'text-rose-700' : isReturn ? 'text-emerald-700' : 'text-indigo-700'}`}>
                               {isWriteOff ? `-${record.quantity} шт` : `+${record.quantity} шт`}
                             </span>
-                            <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                              <Clock size={10} /> {record.date}
-                            </div>
+                            {record.date && (
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                <Clock size={10} /> {record.date}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );

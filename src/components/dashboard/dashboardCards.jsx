@@ -64,14 +64,19 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
   const handleStartEditingTtn = (order) => {
     setTtnValues(prev => ({ ...prev, [order.id]: order.ttn || '' }));
     
-    const defaultSource = order.packagingSource || 'Основний склад';
+    const defaultSource = order.packagingSource || (
+      order.status === 'З наявності' ? 'Основний склад' : (order.supplier || 'Основний склад')
+    );
+
+    const hasBox = order.includeBox ?? true;
+    const hasDustbag = hasBox ? (order.includeDustbag ?? true) : false;
 
     setPackagingSettings(prev => ({
       ...prev,
       [order.id]: {
         source: defaultSource,
-        includeBox: order.includeBox ?? true,
-        includeDustbag: order.includeDustbag ?? true
+        includeBox: hasBox,
+        includeDustbag: hasDustbag
       }
     }));
 
@@ -79,27 +84,40 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
   };
 
   const updatePackaging = (orderId, field, value) => {
-    setPackagingSettings(prev => ({
-      ...prev,
-      [orderId]: {
-        ...prev[orderId],
-        [field]: value
+    setPackagingSettings(prev => {
+      const current = prev[orderId] || {
+        source: 'Основний склад',
+        includeBox: true,
+        includeDustbag: true
+      };
+      const updated = { ...current, [field]: value };
+
+      // Якщо зняли галочку Коробка — автоматично знімаємо Пильовик
+      if (field === 'includeBox' && value === false) {
+        updated.includeDustbag = false;
       }
-    }));
+
+      return {
+        ...prev,
+        [orderId]: updated
+      };
+    });
   };
 
   const handleTtnSave = (e, order) => {
     if (e) e.preventDefault();
     const newTtn = ttnValues[order.id] !== undefined ? ttnValues[order.id] : (order.ttn || '');
     const packInfo = packagingSettings[order.id] || {};
+    const hasBox = packInfo.includeBox ?? true;
+    const hasDustbag = hasBox ? (packInfo.includeDustbag ?? true) : false;
 
     if (typeof onInlineSave === 'function') {
       onInlineSave({ 
         ...order, 
         ttn: newTtn,
         packagingSource: packInfo.source || 'Основний склад',
-        includeBox: packInfo.includeBox ?? true,
-        includeDustbag: packInfo.includeDustbag ?? true
+        includeBox: hasBox,
+        includeDustbag: hasDustbag
       });
     }
     setEditingTtnId(null);
@@ -198,7 +216,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
         const currentPack = packagingSettings[order.id] || {
           source: order.packagingSource || 'Основний склад',
           includeBox: order.includeBox ?? true,
-          includeDustbag: order.includeDustbag ?? true
+          includeDustbag: (order.includeBox ?? true) ? (order.includeDustbag ?? true) : false
         };
 
         let colorsArr = [];
@@ -401,7 +419,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                   <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-100 flex items-center justify-between">
                     <span>Списано з: <strong className="text-slate-800">{order.packagingSource || 'Основний склад'}</strong></span>
                     <span>
-                      {[order.includeBox && 'Коробка', order.includeDustbag && 'Пильовик'].filter(Boolean).join(' + ') || 'Без упаковки'}
+                      {[order.includeBox && 'Коробка', (order.includeBox && order.includeDustbag) && 'Пильовик'].filter(Boolean).join(' + ') || 'Без нашої упаковки'}
                     </span>
                   </div>
                 )}
@@ -450,12 +468,13 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                           Коробка
                         </label>
 
-                        <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700">
+                        <label className={`flex items-center gap-1.5 text-xs font-semibold ${!currentPack.includeBox ? 'opacity-40 cursor-not-allowed text-slate-400' : 'cursor-pointer text-slate-700'}`}>
                           <input
                             type="checkbox"
-                            checked={currentPack.includeDustbag}
+                            disabled={!currentPack.includeBox}
+                            checked={currentPack.includeBox && currentPack.includeDustbag}
                             onChange={(e) => updatePackaging(order.id, 'includeDustbag', e.target.checked)}
-                            className="rounded text-slate-900 focus:ring-slate-900 w-3.5 h-3.5 cursor-pointer"
+                            className="rounded text-slate-900 focus:ring-slate-900 w-3.5 h-3.5 cursor-pointer disabled:cursor-not-allowed"
                           />
                           Пильовик
                         </label>
@@ -501,7 +520,7 @@ export default function DashboardCards({ orders = [], onEditModal, onInlineSave,
                 </div>
               </div>
 
-              {/* Блок Instagram покупця (без надпису, тільки іконка та кнопка) */}
+              {/* Блок Instagram покупця */}
               <div className="border border-dashed border-pink-200 bg-pink-50/30 rounded-xl p-2.5 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-pink-600 p-0.5">

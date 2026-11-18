@@ -36,21 +36,26 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   const [historyLog, setHistoryLog] = useState([]);
   const [isRecalculating, setIsRecalculating] = useState(false);
 
-  // Визначаємо склад пакування для замовлення
+  // Правильне визначення, з чийого складу поїхала коробка/пильовик
   const resolveOrderSource = (order) => {
-    const src = String(order.packagingSource || '').trim();
-    if (src === 'Міла') return 'Міла';
-    if (src === 'Валерій') return 'Валерій';
-    if (src === 'Основний склад' || src === 'Мій склад' || src === 'Мій склад (у мене)') {
+    const status = String(order.status || '').trim();
+    const supplier = String(order.supplier || '').trim();
+    const pkgSource = String(order.packagingSource || '').trim();
+
+    if (pkgSource === 'Міла') return 'Міла';
+    if (pkgSource === 'Валерій') return 'Валерій';
+
+    if (status === 'З наявності' || Boolean(order.stockItemId)) {
       return 'Основний склад';
     }
-    if (order.status === 'З наявності') return 'Основний склад';
-    if (order.supplier === 'Міла') return 'Міла';
-    if (order.supplier === 'Валерій') return 'Валерій';
+
+    if (supplier === 'Міла') return 'Міла';
+    if (supplier === 'Валерій') return 'Валерій';
+
     return 'Основний склад';
   };
 
-  // Головна функція точного перерахунку залишків з нуля (Закупки + Відправки виробникам - Замовлення + Відмови)
+  // Головна функція точного перерахунку залишків з нуля
   const recalculateExactBalances = useCallback(async (currentStockList) => {
     if (!currentStockList || currentStockList.length === 0) return;
     setIsRecalculating(true);
@@ -69,7 +74,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       let changed = false;
 
       const processMaterialItem = (item, isBox) => {
-        // 1. Базова закупка (сума з purchasesHistory або базова загальна кількість)
         const purchases = Array.isArray(item.purchasesHistory) ? item.purchasesHistory : [];
         let basePurchased = purchases.reduce((sum, p) => sum + (Number(p.qty) || 0), 0);
 
@@ -85,7 +89,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
           'Валерій': 0
         };
 
-        // 2. Враховуємо відправки виробникам (shipmentsHistory)
+        // Відправки виробникам
         const shipments = Array.isArray(item.shipmentsHistory) ? item.shipmentsHistory : [];
         shipments.forEach(s => {
           const qty = Number(s.qty) || 0;
@@ -95,7 +99,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
           }
         });
 
-        // 3. Враховуємо ручні списання пошкоджених (writeOffHistory)
+        // Ручні списання пошкоджених
         const writeOffs = Array.isArray(item.writeOffHistory) ? item.writeOffHistory : [];
         writeOffs.forEach(w => {
           const qty = Number(w.qty) || 0;
@@ -105,11 +109,10 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
           }
         });
 
-        // 4. Проходимо по всіх замовленнях
+        // Списання та повернення по замовленнях
         allOrders.forEach(order => {
           const status = String(order.status || '').trim();
           const hasBox = order.includeBox === true;
-          // Залізне правило: пильовик може бути відправлений ТІЛЬКИ разом із коробкою
           const hasDustbag = hasBox && (order.includeDustbag === true);
 
           const appliesToThisMaterial = isBox ? hasBox : hasDustbag;
@@ -133,7 +136,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
               date: order.date || order.createdAt?.slice(0, 10) || ''
             });
           } else if (status === 'Відмова') {
-            // Відмова повертається на Мій склад (Основний склад)
             balances['Основний склад'] = (balances['Основний склад'] || 0) + 1;
 
             generatedLogs.push({
@@ -182,7 +184,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     }
   }, [onAddItem, setStock]);
 
-  // Автоматичний перерахунок при відкритті складу
   useEffect(() => {
     if (stock && stock.length > 0) {
       recalculateExactBalances(stock);
@@ -230,7 +231,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     setSelectedItemDetails(null);
   };
 
-  // Ручне коригування початкової бази/залишків
   const handleSaveSuppliers = (item) => {
     const myStockVal = Number(tempSuppliers['Основний склад'] ?? (item.suppliers?.['Основний склад'] || 0));
     const milaVal = Number(tempSuppliers['Міла'] ?? (item.suppliers?.['Міла'] || 0));
@@ -256,7 +256,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     setEditingSupplierItemId(null);
   };
 
-  // Ручне списання пошкоджених
   const handleConfirmWriteOff = (e) => {
     e.preventDefault();
     const qty = parseInt(writeOffAmount);
@@ -296,7 +295,6 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     setWriteOffAmount('');
   };
 
-  // Відправка виробникам із фіксацією часу та кількості
   const handleConfirmSendToManufacturer = (e) => {
     e.preventDefault();
     const qty = parseInt(sendAmount);

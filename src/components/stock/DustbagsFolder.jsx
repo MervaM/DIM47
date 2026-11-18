@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit3, X, ShoppingBag, Send, Clock } from 'lucide-react';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDeleteItem = () => {} }) {
@@ -26,6 +26,53 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
   const [sendTarget, setSendTarget] = useState('Міла');
   const [sendQty, setSendQty] = useState('');
   const [sendDateTime, setSendDateTime] = useState(() => new Date().toISOString().slice(0, 16));
+
+  // Список замовлень для відображення списань і повернень пильовиків
+  const [orderMovements, setOrderMovements] = useState([]);
+
+  useEffect(() => {
+    const fetchOrdersForHistory = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'orders'));
+        const list = [];
+        snap.forEach((docSnap) => {
+          const o = docSnap.data();
+          const status = String(o.status || '').trim();
+          const hasDustbag = (o.includeBox === true) && (o.includeDustbag === true);
+          if (!hasDustbag) return;
+
+          if (status === 'Доставка' || status === 'Успішно') {
+            let src = String(o.packagingSource || '').trim();
+            if (src !== 'Міла' && src !== 'Валерій') {
+              src = (status === 'З наявності' || o.stockItemId) ? 'Мій склад' : (o.supplier || 'Мій склад');
+            }
+            list.push({
+              id: docSnap.id,
+              type: 'write_off',
+              client: o.clientName || o.client || 'Клієнт',
+              source: src,
+              status,
+              date: o.date || (o.createdAt ? o.createdAt.slice(0, 10) : '')
+            });
+          } else if (status === 'Відмова') {
+            list.push({
+              id: `${docSnap.id}_ret`,
+              type: 'return',
+              client: o.clientName || o.client || 'Клієнт',
+              source: 'Мій склад',
+              status: 'Відмова (повернення)',
+              date: o.date || (o.createdAt ? o.createdAt.slice(0, 10) : '')
+            });
+          }
+        });
+        setOrderMovements(list.reverse());
+      } catch (err) {
+        console.error('Помилка завантаження історії списань пильовиків:', err);
+      }
+    };
+
+    fetchOrdersForHistory();
+  }, []);
 
   const parsedMyStock = Number(myStockQty) || 0;
   const parsedMila = Number(milaQty) || 0;
@@ -104,7 +151,8 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
         'Валерій': parsedValeriy
       },
       purchasesHistory: initialHistory,
-      shipmentsHistory: editingItem?.shipmentsHistory || []
+      shipmentsHistory: editingItem?.shipmentsHistory || [],
+      writeOffHistory: editingItem?.writeOffHistory || []
     };
 
     try {
@@ -117,7 +165,6 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
     }
   };
 
-  // Додавання нової закупки пильовиків
   const handleAddPurchase = async (e) => {
     e.preventDefault();
     const qty = Number(purchaseQty);
@@ -165,7 +212,6 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
     }
   };
 
-  // Відправка пильовиків виробнику (Мілі / Валерію)
   const handleSendToManufacturer = async (e) => {
     e.preventDefault();
     const qty = Number(sendQty);
@@ -232,6 +278,7 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
             : Math.max(0, total - mila - valeriy);
           const purchases = item.purchasesHistory || [];
           const shipments = item.shipmentsHistory || [];
+          const manualWriteOffs = item.writeOffHistory || [];
 
           return (
             <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col gap-3 relative">
@@ -292,10 +339,10 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
                 </div>
               </div>
 
-              {/* Історія відправок виробникам */}
+              {/* Відправки виробникам */}
               {shipments.length > 0 && (
                 <div className="mt-1 pt-2.5 border-t border-slate-200/70 space-y-1.5">
-                  <div className="text-[11px] font-bold text-indigo-950">Відправки виробникам:</div>
+                  <div className="text-[11px] font-bold text-indigo-950 text-center">Відправки виробникам:</div>
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {shipments.map(s => (
                       <div key={s.id} className="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-indigo-100 text-[11px]">
@@ -312,10 +359,10 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
                 </div>
               )}
 
-              {/* Історія закупок пильовиків */}
+              {/* Історія закупок */}
               {purchases.length > 0 && (
                 <div className="mt-1 pt-2.5 border-t border-slate-200/70 space-y-1.5">
-                  <div className="text-[11px] font-bold text-slate-600">Історія закупок:</div>
+                  <div className="text-[11px] font-bold text-slate-600 text-center">Історія закупок:</div>
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {purchases.map(p => (
                       <div key={p.id} className="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-slate-100 text-[11px]">
@@ -330,6 +377,46 @@ export default function DustbagsFolder({ stock = [], onAddItem = () => {}, onDel
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Історія списань та повернень */}
+              {(orderMovements.length > 0 || manualWriteOffs.length > 0) && (
+                <div className="mt-1 pt-2.5 border-t border-slate-200/70 space-y-1.5">
+                  <div className="text-[11px] font-bold text-rose-900 text-center">Історія списань та повернень:</div>
+                  <div className="space-y-1 max-h-44 overflow-y-auto">
+                    {manualWriteOffs.map(w => (
+                      <div key={w.id} className="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-rose-100 text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-rose-700">-{w.qty} шт</span>
+                          <span className="text-slate-600">({w.target === 'Основний склад' ? 'Мій склад' : w.target})</span>
+                          <span className="text-[10px] text-slate-400">{w.reason}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                          <Clock size={10} /> {w.date}
+                        </span>
+                      </div>
+                    ))}
+                    {orderMovements.map(m => {
+                      const isReturn = m.type === 'return';
+                      return (
+                        <div key={m.id} className={`flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border text-[11px] ${isReturn ? 'border-emerald-100' : 'border-rose-100'}`}>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`font-bold ${isReturn ? 'text-emerald-700' : 'text-rose-700'}`}>
+                              {isReturn ? '+1 шт' : '-1 шт'}
+                            </span>
+                            <span className="font-semibold text-slate-800">#{m.client}</span>
+                            <span className="text-[10px] text-slate-500">({m.source} • {m.status})</span>
+                          </div>
+                          {m.date && (
+                            <span className="text-[10px] text-slate-400 flex items-center gap-0.5 shrink-0">
+                              <Clock size={10} /> {m.date}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

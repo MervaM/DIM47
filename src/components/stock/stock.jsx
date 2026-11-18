@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, Trash2, Edit3, Check, MinusCircle, Send, Clock } from 'lucide-react';
-import { collection, getDocs } from "firebase/firestore";
+import React, { useState, useEffect } from 'react';
+import { X, Edit3, Check, MinusCircle, Send, Clock, RefreshCw } from 'lucide-react';
+import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { db } from '../../firebase';
 import ShoesFolder from './ShoesFolder';
 import BoxesFolder from './BoxesFolder';
@@ -32,15 +32,25 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   const [sendTarget, setSendTarget] = useState('Міла');
   const [sendDateTime, setSendDateTime] = useState(() => new Date().toISOString().slice(0, 16));
 
-  // Єдина історія транзакцій (списання + відправки + авто-списання по замовленнях)
+  // Єдина історія транзакцій
   const [historyLog, setHistoryLog] = useState(() => {
     const saved = localStorage.getItem('stock_history_log');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Завантаження замовлень з Firestore для автоматичного списання/повернень
+  // Визначаємо, з чийого складу списувати замовлення (за packagingSource з картки ТТН)
+  const resolveOrderSource = (order) => {
+    const src = String(order.packagingSource || '').trim();
+    if (src === 'Міла') return 'Міла';
+    if (src === 'Валерій') return 'Валерій';
+    return 'Основний склад';
+  };
+
+  // Синхронізація замовлень зі складом строго за галочками includeBox та includeDustbag
   useEffect(() => {
-    const fetchOrdersForStock = async () => {
+    if (!stock || stock.length === 0) return;
+
+    const syncOrdersWithStock = async () => {
       try {
         const querySnapshot = await getDocs(collection(db, "orders"));
         const fetchedOrders = [];
@@ -48,120 +58,175 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
           fetchedOrders.push({ id: docSnap.id, ...docSnap.data() });
         });
 
-        const processedOrderIds = JSON.parse(localStorage.getItem('processed_order_ids') || '[]');
-        const newSuccessfulOrders = fetchedOrders.filter(o => o.status === 'Успішно' && !processedOrderIds.includes(o.id));
-        const returnedOrders = fetchedOrders.filter(o => o.status === 'Відмова' && !processedOrderIds.includes(o.id + '_return'));
+        const processedShipments = JSON.parse(localStorage.getItem('processed_shipments_v3') || '[]');
+        const processedReturns = JSON.parse(localStorage.getItem('processed_returns_v3') || '[]');
 
-        if (newSuccessfulOrders.length > 0 || returnedOrders.length > 0) {
-          let updatedStock = [...stock];
-          let newLogEntries = [];
-          let newlyProcessedIds = [...processedOrderIds];
+        // Замовлення, які поїхали або виконані (Доставка або Успішно)
+        const shippedOrders = fetchedOrders.filter(
+          o => (o.status === 'Доставка' || o.status === 'Успішно') && !processedShipments.includes(o.id)
+        );
 
-          // 1. Успішні замовлення -> списуємо з "Основного складу"
-          newSuccessfulOrders.forEach(order => {
-            const boxIndex = updatedStock.findIndex(item => item.folderId === 'boxes');
-            if (boxIndex !== -1) {
-              const currentBox = updatedStock[boxIndex];
-              const currentSuppliers = currentBox.suppliers || { 'Основний склад': currentBox.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-              const myStock = currentSuppliers['Основний склад'] || 0;
-              
-              if (myStock > 0) {
-                currentSuppliers['Основний склад'] = Math.max(0, myStock - 1);
-                currentBox.quantity = Math.max(0, (currentBox.quantity || 0) - 1);
-                currentBox.suppliers = currentSuppliers;
-                
-                newLogEntries.push({
-                  id: Date.now() + Math.random(),
-                  type: 'auto_write_off',
-                  itemName: `Коробка (успішне замовлення #${order.clientName || order.id.slice(0,5)})`,
-                  target: 'Основний склад',
-                  quantity: 1,
-                  reason: 'Автосписання по виконаному замовленню',
-                  date: new Date().toLocaleString()
-                });
-              }
-            }
+        // Повернення (Відмова)
+        const returnedOrders = fetchedOrders.filter(
+          o => o.status === 'Відмова' && !processedReturns.includes(o.id)
+        );
 
-            const dustbagIndex = updatedStock.findIndex(item => item.folderId === 'dustbags');
-            if (dustbagIndex !== -1) {
-              const currentDb = updatedStock[dustbagIndex];
-              const currentSuppliers = currentDb.suppliers || { 'Основний склад': currentDb.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-              const myStock = currentSuppliers['Основний склад'] || 0;
-              
-              if (myStock > 0) {
-                currentSuppliers['Основний склад'] = Math.max(0, myStock - 1);
-                currentDb.quantity = Math.max(0, (currentDb.quantity || 0) - 1);
-                currentDb.suppliers = currentSuppliers;
-                
-                newLogEntries.push({
-                  id: Date.now() + Math.random(),
-                  type: 'auto_write_off',
-                  itemName: `Пильовик (успішне замовлення #${order.clientName || order.id.slice(0,5)})`,
-                  target: 'Основний склад',
-                  quantity: 1,
-                  reason: 'Автосписання по виконаному замовленню',
-                  date: new Date().toLocaleString()
-                });
-              }
-            }
+        if (shippedOrders.length === 0 && returnedOrders.length === 0) return;
 
-            newlyProcessedIds.push(order.id);
-          });
+        let updatedStock = stock.map(item => ({
+          ...item,
+          suppliers: item.suppliers ? { ...item.suppliers } : undefined
+        }));
 
-          // 2. Відмови (повернення) -> плюсуємо назад на "Основний склад"
-          returnedOrders.forEach(order => {
-            const boxIndex = updatedStock.findIndex(item => item.folderId === 'boxes');
-            if (boxIndex !== -1) {
-              const currentBox = updatedStock[boxIndex];
-              const currentSuppliers = currentBox.suppliers || { 'Основний склад': currentBox.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-              currentSuppliers['Основний склад'] = (currentSuppliers['Основний склад'] || 0) + 1;
-              currentBox.quantity = (currentBox.quantity || 0) + 1;
-              currentBox.suppliers = currentSuppliers;
+        let newLogEntries = [];
+        const newProcessedShipments = [...processedShipments];
+        const newProcessedReturns = [...processedReturns];
+        let boxesChanged = false;
+        let dustbagsChanged = false;
 
-              newLogEntries.push({
-                id: Date.now() + Math.random(),
-                type: 'return',
-                itemName: `Коробка (повернення від клієнта)`,
-                target: 'Основний склад',
-                quantity: 1,
-                reason: 'Повернення (плюс на склад)',
-                date: new Date().toLocaleString()
-              });
-            }
+        const boxIndex = updatedStock.findIndex(item => item.folderId === 'boxes');
+        const dustbagIndex = updatedStock.findIndex(item => item.folderId === 'dustbags');
 
-            const dustbagIndex = updatedStock.findIndex(item => item.folderId === 'dustbags');
-            if (dustbagIndex !== -1) {
-              const currentDb = updatedStock[dustbagIndex];
-              const currentSuppliers = currentDb.suppliers || { 'Основний склад': currentDb.quantity || 0, 'Міла': 0, 'Валерій': 0 };
-              currentSuppliers['Основний склад'] = (currentSuppliers['Основний склад'] || 0) + 1;
-              currentDb.quantity = (currentDb.quantity || 0) + 1;
-              currentDb.suppliers = currentSuppliers;
+        // 1. Списання по відправлених замовленнях (тільки де стоять галочки includeBox / includeDustbag)
+        shippedOrders.forEach(order => {
+          const hasBox = order.includeBox === true;
+          const hasDustbag = order.includeDustbag === true;
 
-              newLogEntries.push({
-                id: Date.now() + Math.random(),
-                type: 'return',
-                itemName: `Пильовик (повернення від клієнта)`,
-                target: 'Основний склад',
-                quantity: 1,
-                reason: 'Повернення (плюс на склад)',
-                date: new Date().toLocaleString()
-              });
-            }
-
-            newlyProcessedIds.push(order.id + '_return');
-          });
-
-          if (newLogEntries.length > 0) {
-            setHistoryLog(prev => [...newLogEntries, ...prev]);
-            localStorage.setItem('processed_order_ids', JSON.stringify(newlyProcessedIds));
+          // Якщо не стоїть жодна галочка (їхало в коробці виробника без наших матеріалів) — пропускаємо
+          if (!hasBox && !hasDustbag) {
+            newProcessedShipments.push(order.id);
+            return;
           }
+
+          const targetSource = resolveOrderSource(order);
+          const sourceLabel = targetSource === 'Основний склад' ? 'Мій склад' : targetSource;
+          const clientLabel = order.clientName || order.client || order.id.slice(0, 5);
+
+          // Списуємо коробку, якщо стоїть галочка includeBox
+          if (hasBox && boxIndex !== -1) {
+            const box = updatedStock[boxIndex];
+            const suppliers = box.suppliers || { 'Основний склад': box.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+            suppliers[targetSource] = Math.max(0, (suppliers[targetSource] || 0) - 1);
+            box.suppliers = suppliers;
+            box.quantity = (suppliers['Основний склад'] || 0) + (suppliers['Міла'] || 0) + (suppliers['Валерій'] || 0);
+            boxesChanged = true;
+
+            newLogEntries.push({
+              id: Date.now() + Math.random(),
+              type: 'auto_write_off',
+              itemName: `Коробка (#${clientLabel})`,
+              target: sourceLabel,
+              quantity: 1,
+              reason: `Статус "${order.status}" (галочка Коробка) — списано: ${sourceLabel}`,
+              date: new Date().toLocaleString()
+            });
+          }
+
+          // Списуємо пильовик, якщо стоїть галочка includeDustbag
+          if (hasDustbag && dustbagIndex !== -1) {
+            const dbItem = updatedStock[dustbagIndex];
+            const suppliers = dbItem.suppliers || { 'Основний склад': dbItem.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+            suppliers[targetSource] = Math.max(0, (suppliers[targetSource] || 0) - 1);
+            dbItem.suppliers = suppliers;
+            dbItem.quantity = (suppliers['Основний склад'] || 0) + (suppliers['Міла'] || 0) + (suppliers['Валерій'] || 0);
+            dustbagsChanged = true;
+
+            newLogEntries.push({
+              id: Date.now() + Math.random(),
+              type: 'auto_write_off',
+              itemName: `Пильовик (#${clientLabel})`,
+              target: sourceLabel,
+              quantity: 1,
+              reason: `Статус "${order.status}" (галочка Пильовик) — списано: ${sourceLabel}`,
+              date: new Date().toLocaleString()
+            });
+          }
+
+          newProcessedShipments.push(order.id);
+        });
+
+        // 2. Повернення (Відмова) -> плюсуємо на Мій склад (Основний склад) тільки те, де була галочка
+        returnedOrders.forEach(order => {
+          const hasBox = order.includeBox === true;
+          const hasDustbag = order.includeDustbag === true;
+
+          if (!hasBox && !hasDustbag) {
+            newProcessedReturns.push(order.id);
+            return;
+          }
+
+          const clientLabel = order.clientName || order.client || order.id.slice(0, 5);
+
+          if (hasBox && boxIndex !== -1) {
+            const box = updatedStock[boxIndex];
+            const suppliers = box.suppliers || { 'Основний склад': box.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+            suppliers['Основний склад'] = (suppliers['Основний склад'] || 0) + 1;
+            box.suppliers = suppliers;
+            box.quantity = (suppliers['Основний склад'] || 0) + (suppliers['Міла'] || 0) + (suppliers['Валерій'] || 0);
+            boxesChanged = true;
+
+            newLogEntries.push({
+              id: Date.now() + Math.random(),
+              type: 'return',
+              itemName: `Коробка (повернення #${clientLabel})`,
+              target: 'Мій склад',
+              quantity: 1,
+              reason: 'Відмова/повернення — додано на Мій склад',
+              date: new Date().toLocaleString()
+            });
+          }
+
+          if (hasDustbag && dustbagIndex !== -1) {
+            const dbItem = updatedStock[dustbagIndex];
+            const suppliers = dbItem.suppliers || { 'Основний склад': dbItem.quantity || 0, 'Міла': 0, 'Валерій': 0 };
+            suppliers['Основний склад'] = (suppliers['Основний склад'] || 0) + 1;
+            dbItem.suppliers = suppliers;
+            dbItem.quantity = (suppliers['Основний склад'] || 0) + (suppliers['Міла'] || 0) + (suppliers['Валерій'] || 0);
+            dustbagsChanged = true;
+
+            newLogEntries.push({
+              id: Date.now() + Math.random(),
+              type: 'return',
+              itemName: `Пильовик (повернення #${clientLabel})`,
+              target: 'Мій склад',
+              quantity: 1,
+              reason: 'Відмова/повернення — додано на Мій склад',
+              date: new Date().toLocaleString()
+            });
+          }
+
+          newProcessedReturns.push(order.id);
+        });
+
+        // Зберігаємо оновлені залишки у Firestore та в локальний стан
+        if (boxesChanged && boxIndex !== -1) {
+          const updatedBox = updatedStock[boxIndex];
+          await setDoc(doc(db, 'stock', String(updatedBox.id)), updatedBox, { merge: true });
+          if (onAddItem) onAddItem(updatedBox);
         }
+
+        if (dustbagsChanged && dustbagIndex !== -1) {
+          const updatedDb = updatedStock[dustbagIndex];
+          await setDoc(doc(db, 'stock', String(updatedDb.id)), updatedDb, { merge: true });
+          if (onAddItem) onAddItem(updatedDb);
+        }
+
+        if (setStock && (boxesChanged || dustbagsChanged)) {
+          setStock(updatedStock);
+        }
+
+        if (newLogEntries.length > 0) {
+          setHistoryLog(prev => [...newLogEntries, ...prev]);
+        }
+
+        localStorage.setItem('processed_shipments_v3', JSON.stringify(newProcessedShipments));
+        localStorage.setItem('processed_returns_v3', JSON.stringify(newProcessedReturns));
       } catch (err) {
         console.error("Помилка синхронізації замовлень зі складом:", err);
       }
     };
 
-    fetchOrdersForStock();
+    syncOrdersWithStock();
   }, [stock]);
 
   useEffect(() => {
@@ -184,10 +249,16 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
     { id: 'availability', name: 'Наявність' },
   ];
 
-  const handleAddItemWrapper = (newItem) => {
+  const handleAddItemWrapper = async (newItem) => {
+    try {
+      await setDoc(doc(db, 'stock', String(newItem.id)), newItem, { merge: true });
+    } catch (e) {
+      console.error("Помилка збереження в Firestore:", e);
+    }
+
     if (onAddItem) {
       onAddItem(newItem);
-    } else {
+    } else if (setStock) {
       setStock(prev => {
         const exists = prev.some(item => item.id === newItem.id);
         if (exists) {
@@ -201,7 +272,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
   const handleDeleteItemWrapper = (id) => {
     if (onDeleteItem) {
       onDeleteItem(id);
-    } else {
+    } else if (setStock) {
       setStock(prev => prev.filter(item => item.id !== id));
     }
     setSelectedItemDetails(null);
@@ -272,7 +343,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
       id: Date.now(),
       type: 'write_off',
       itemName,
-      target: writeOffTarget,
+      target: writeOffTarget === 'Основний склад' ? 'Мій склад' : writeOffTarget,
       quantity: qty,
       reason: writeOffReason || 'Пошкоджено',
       date: new Date().toLocaleString()
@@ -297,7 +368,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
 
     const myStockVal = currentSuppliers['Основний склад'] || 0;
     if (qty > myStockVal) {
-      alert('На твоєму основному складі недостатньо штук для відправки!');
+      alert('На твоєму складі недостатньо штук для відправки!');
       return;
     }
 
@@ -311,7 +382,16 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
 
     const updatedItem = {
       ...sendModalItem,
-      suppliers: updatedSuppliers
+      suppliers: updatedSuppliers,
+      shipmentsHistory: [
+        {
+          id: Date.now(),
+          target: sendTarget,
+          qty,
+          date: sendDateTime ? sendDateTime.replace('T', ' ') : new Date().toLocaleString()
+        },
+        ...(sendModalItem.shipmentsHistory || [])
+      ]
     };
 
     handleAddItemWrapper(updatedItem);
@@ -517,28 +597,42 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
               <p className="text-xs text-slate-400 text-center py-4">Немає доданих коробок чи пильовиків.</p>
             )}
 
-            {/* Блок єдиної історії (рухи, відправки, автосписання по замовленнях та повернення) */}
+            {/* Блок єдиної історії */}
             <div className="border-t border-slate-100 pt-6 space-y-3 mt-6">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap justify-between items-center gap-2">
                 <h3 className="text-md font-bold text-slate-900">Історія рухів та списань матеріалів</h3>
-                {historyLog.length > 0 && (
+                <div className="flex items-center gap-3">
                   <button 
                     onClick={() => {
-                      setHistoryLog([]);
-                      localStorage.removeItem('stock_history_log');
-                      localStorage.removeItem('processed_order_ids');
+                      localStorage.removeItem('processed_shipments_v3');
+                      localStorage.removeItem('processed_returns_v3');
+                      window.location.reload();
                     }}
-                    className="text-[11px] text-slate-400 hover:text-rose-600 underline cursor-pointer"
+                    className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                    title="Перевірити всі замовлення з бази ще раз"
                   >
-                    Очистити історію
+                    <RefreshCw size={11} /> Оновити по замовленнях
                   </button>
-                )}
+                  {historyLog.length > 0 && (
+                    <button 
+                      onClick={() => {
+                        setHistoryLog([]);
+                        localStorage.removeItem('stock_history_log');
+                        localStorage.removeItem('processed_shipments_v3');
+                        localStorage.removeItem('processed_returns_v3');
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-rose-600 underline cursor-pointer"
+                    >
+                      Очистити історію
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4">
                 {historyLog.length === 0 ? (
                   <p className="text-xs text-slate-400 text-center py-2">Ще не було жодних операцій чи списань.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
                     {historyLog.map(record => {
                       const isWriteOff = record.type === 'write_off' || record.type === 'auto_write_off';
                       const isReturn = record.type === 'return';
@@ -551,7 +645,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
                               {record.reason}
                             </div>
                           </div>
-                          <div className="text-right">
+                          <div className="text-right shrink-0">
                             <span className={`font-black ${isWriteOff ? 'text-rose-700' : isReturn ? 'text-emerald-700' : 'text-indigo-700'}`}>
                               {isWriteOff ? `-${record.quantity} шт` : `+${record.quantity} шт`}
                             </span>
@@ -591,7 +685,7 @@ export default function Stock({ stock = [], setStock, onAddItem, onDeleteItem })
         </div>
       )}
 
-      {/* Модалка відправки виробнику (з часом та кількістю) */}
+      {/* Модалка відправки виробнику */}
       {sendModalItem && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 space-y-4">
